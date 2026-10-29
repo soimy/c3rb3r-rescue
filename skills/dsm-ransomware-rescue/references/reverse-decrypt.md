@@ -36,6 +36,8 @@ REA/Ghidra 静态流程：打开派生文件 → 查字符串和调用引用 →
 
 `recover_ram_keys.py --ram SAVED_RAM --profile REVIEWED_PROFILE --output NEW_PRIVATE_DIR` 从只读映射中提取候选，不打印 key 字节。除全局主材料外，ChaCha state 的 key/nonce 与相邻原始字段重复，可用于发现文件对象；它们可能是过期内存，尚需关联文件描述符、路径和 footer。
 
+对于 `capture_process_memory.py` 产生的进程映射集合，使用 `recover_process_key.py`，按保存的 VA 直接读取，不走 QEMU 页表或 PCI hole 换算。它核对样本摘要、代码签名、0x20 模式、每个所需映射的 SHA 和不可读页，才保存 48 字节候选。候选仍须经已知原文或完整历史摘要验证；采集集合也不包括寄存器或未映射/已释放物理页。
+
 先验证公开 ChaCha8 向量、计数器进位、短块丢弃和分段边界，再做多个真实正反文件对照。至少包含全文件、首段和分段样本。比较完整 SHA-256 或逐字节内容；不能只判断 tar magic、图片可预览或文本“看起来合理”。
 
 本案五组真实样本全部逐字节一致；恢复日志中的 23 份 XZ 完整读到 EOF 并通过 CRC。一个文本日志存在非 UTF-8 字节，因此保留不确定状态；三个文件在 footer 之后还有新增日志，追加部分单独保全。

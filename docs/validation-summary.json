@@ -1,7 +1,14 @@
 {
   "date": "2026-10-29",
   "runtime": {"python": "3.12.14", "numpy": "2.3.5", "cryptography": "50.0.2"},
-  "unit_tests": {"run": 16, "failures": 0, "errors": 0},
+  "unit_tests": {"run": 21, "failures": 0, "errors": 0, "skipped": 1, "platform": "macOS"},
+  "linux_process_suite": {
+    "run": 5, "failures": 0, "errors": 0, "skipped": 0,
+    "environment": "Isolated ARM64 container in local OrbStack; no network, read-only root, no extra capabilities",
+    "image": "python@sha256:673719e071ecf27434fd2635bbd8d00f49f4fdd81f243143438a42ced8bedf60",
+    "live_test": "Capture only a test-created stopped child, read back a known marker by VA, verify state remains T",
+    "bare_metal_or_DSM_test": false
+  },
   "archive_self_test": "passed",
   "skill_structure_validation": "passed",
   "real_offline_replay": {
@@ -19,6 +26,8 @@
   "not_reperformed": [
     "Live QEMU memory acquisition by the new parameterized collector",
     "Real UPX invocation by the new unpacking wrapper",
+    "Physical DSM process capture or AVML/LiME whole-memory acquisition",
+    "Real-malware process-map candidate extraction (synthetic layout only)",
     "Full rehash or decryption of all external business backups",
     "Authenticated GitLab UI, clone, LFS checkout, CI and production capacity tests"
   ],

@@ -22,7 +22,17 @@ python3 skills/dsm-ransomware-rescue/scripts/verify_backup.py --self-test
 
 完整测试记录保存在本地 `private/receipts/`，发布验证摘要记录实际测试数与环境。skill 通过官方 quick_validate 前言/结构检查；这不等于所有处置决策都由机器验证。
 
-本轮 16 项单元测试全部通过；机器可读的结果范围见 [validation-summary.json](validation-summary.json)。归档自检单独执行，不合并到单元测试数量。
+初始 16 项单元测试全部通过。物理机路径扩展后共 21 项：macOS 运行 20 项通过，跳过依赖 Linux /proc 的 1 项；隔离 Linux 容器执行进程内存子集 5 项全部通过，包含该实际读取测试。机器可读的结果范围见 [validation-summary.json](validation-summary.json)。归档自检单独执行，不合并到单元测试数量。
+
+## 物理机流程扩展的验证
+
+新增测试覆盖 PID 重用/线程非 T/附加 tracer 拒绝、目标设备与样本摘要不符、缺页保留及后续页面读取、独占新输出、异常时保留部分证据，以及进程映射中的签名/模式/摘要/空洞验证。
+
+Linux 测试在本机 OrbStack 的独立 ARM64 容器进行：断网、根文件系统只读、无额外 capabilities、不挂载原始证据。测试只创建并暂停一个无害 Python 子进程，完整调用进程采集器，随后从保存的 VA 映射读回预置文本，并验证目标仍为 T。测试结束只杀掉这个测试自己创建的子进程，不操作任何受灾 PID。
+
+这验证了真实 Linux /proc 读取和保持暂停的行为，**不等于物理 DSM 的内核/权限适配，也不是 AVML / LiME 的整机采集验证**。真实样本的进程 VA 提取器目前使用合成布局验证；历史 RAM 中的真实主材料重放仍属于原 QEMU 路径。
+
+本次日志位于 Git 忽略的 local-validation/，不会修改已经只读封存的 private/ 检查点。新工具源码与其测试公开；真实密钥仍未发布。
 
 ## 真实离线重放
 

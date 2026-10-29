@@ -1,15 +1,16 @@
 ---
 name: dsm-ransomware-rescue
-description: Preserve and investigate a DSM ransomware incident, recover sample-specific keys from saved QEMU RAM, decrypt independent copies, and validate GitLab recovery. Use for evidence preservation and defensive recovery; do not assume that an extension, family name, or matching symptoms proves an exploit or a usable decryption key.
+description: Preserve volatile keys during DSM or Linux ransomware incidents on virtual or physical machines, investigate saved memory, decrypt independent copies, and validate GitLab recovery. Use for defensive rescue; a matching extension or family name does not prove a usable key or acquisition compatibility.
 ---
 
 # DSM ransomware rescue
 
-交付可复核的证据和恢复结果。先确定当前阶段，再只读取相关参考材料；不必每次重做整条流程。
+以保住易失密钥为首要目标，交付可复核的证据和恢复结果。先止住已确认的加密活动、保留电源与受控管理通道，再尽早采集内存；不要等待全盘扫描或攻击归因才采集，也不要为取得工具重启受灾机。采集可能比完整逆向更紧迫，捕获后再离线分析。
 
 ## 阶段与工具
 
 - 现场仍在线、需要保留远程管理或内存：读 [保全与内存](references/containment-memory.md)。`scripts/capture_qemu_ram.py` 只读取显式选定的 QEMU RAM 映射；`scripts/seal_evidence.py` 复制并核对已稳定的证据目录。
+- 物理机 Linux / DSM：读 [物理机内存](references/physical-memory.md)。已知且暂停的目标可先用 `capture_process_memory.py` 保存进程映射，再按内核条件选择 AVML / LiME 整机采集。`recover_process_key.py` 仅从已保存映射提取当前样本布局的候选；不把进程 dump 说成完整 RAM。
 - 样本分析、页表与密钥、明密文对照：读 [逆向与解密](references/reverse-decrypt.md)。使用已安装的 REA 静态分析工具；先发现实际工具 schema。`scripts/recover_ram_keys.py` 和 `scripts/decrypt_copy.py` 使用本次样本已验证布局，不能自动扩展到新样本。
 - 文件覆盖范围、硬链接、备份格式：读 [盘点与校验](references/inventory-verify.md)。`scripts/inventory.py` 仅统计元数据；`scripts/verify_roots.py` 预检人工审阅的 NUL 路径清单；`scripts/verify_backup.py` 不解包到文件系统。
 - GitLab 恢复实例：读 [隔离恢复](references/gitlab-restore.md)。真实配置、版本、权限和宿主能力需现场重新发现。
@@ -26,7 +27,7 @@ description: Preserve and investigate a DSM ransomware incident, recover sample-
 
 ## 本样本资料
 
-`assets/libgld-802ac85d.json` 记录二进制摘要、代码签名、静态地址及本次 QEMU RAM 的 PCI hole 映射。该配置不是通用环境检测器。不同样本或 VM 布局先重新推导并对照原件验证，再考虑新 profile。
+`assets/libgld-802ac85d.json` 记录二进制摘要、代码签名、静态地址及本次 QEMU RAM 的 PCI hole 映射。该配置不是通用环境检测器。不同样本、会话或 RAM 格式先重新验证；LiME、物理 padded/raw、ELF core、进程映射都不能直接当成这份 QEMU pc.ram 输入。
 
 所有脚本可查看 `--help`；`inventory.py ROOT...` 为简单位置参数入口。运行回归测试的说明位于仓库 README。现场受灾 DSM 只运行必要的标准库采集程序，解密和分析在干净主机进行。
 
