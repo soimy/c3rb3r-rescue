@@ -2,10 +2,12 @@
 """Inspect the Git INDEX before commit/push; never print detected secret values.
 
 Optional --master-file checks raw/hex/base64 representations of the real 48-byte
-material and its IV/key portions. This is a guard, not a complete secret scanner.
+material and its IV/key portions. Only an explicitly authorized, exact public
+record digest is exempted. This is a guard, not a complete secret scanner.
 """
 import argparse
 import base64
+import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
@@ -14,6 +16,12 @@ import subprocess
 ALLOWED_ROOTS = {'scripts', 'tests', 'docs', 'profiles', 'skills'}
 ALLOWED_FILES = {'.gitignore', 'README.md', 'requirements.txt', 'AGENTS.md'}
 SUFFIXES = {'.py', '.md', '.txt', '.json', '.yaml'}
+# The owner expressly authorized publishing this recovery candidate on 2026-10-29.
+# Changing the path or any byte requires a separately reviewed publication decision.
+PUBLIC_KEY_RECORDS = {
+    'profiles/recovery-key-20261028.json':
+        '0e5e4dd3cd6499f9eb11dd90a560c12836627e8618835f1b694391e928441244',
+}
 
 
 def inspect_blob(path, data, mode, secrets=()):
@@ -41,7 +49,11 @@ def inspect_blob(path, data, mode, secrets=()):
     ):
         if re.search(expression, text):
             errors.append(message)
-    if any(secret in data for secret in secrets):
+    approved = PUBLIC_KEY_RECORDS.get(path)
+    approved_blob = approved is not None and hashlib.sha256(data).hexdigest() == approved
+    if approved is not None and not approved_blob:
+        errors.append('published key record differs from approved digest')
+    if any(secret in data for secret in secrets) and not approved_blob:
         errors.append('known incident key material')
     return errors
 

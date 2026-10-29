@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "id": "incident-20261028-master-01",
+  "format": "iv16-aes-key32",
+  "material_hex": "9081614f10c31fbb4c536e68ba92119282a24bc7f6dc06aa29e2b1f5a42e3c6b84fba42f0a1673f07d806c4ec372abd5",
+  "material_sha256": "63fc44a9b7814bf8d57bb7875221f19c813dcaeff3ce83222ae9275ea1fa7822",
+  "layout": {
+    "iv": {
+      "offset": 0,
+      "bytes": 16
+    },
+    "aes_key": {
+      "offset": 16,
+      "bytes": 32
+    }
+  },
+  "provenance": {
+    "source": "existing incident QEMU guest RAM",
+    "publication_date": "2026-10-29",
+    "owner_authorized_publication": true,
+    "not_an_attacker_rsa_private_key": true
+  },
+  "sample": {
+    "packed_sha256": "802ac85d19dc6db2b1849bb3499877280544d04a0ae94d4c408b6c321669903d",
+    "unpacked_sha256": "78d06b74827429f8b9947ac5940b15fb6e6f724386dcb04dc6f7eb6dcd41d3a4"
+  },
+  "scope": {
+    "observed_footer_marker_hex": "ce35a593",
+    "crypto_mode": "0x20",
+    "supported_file_modes": [
+      "0x24",
+      "0x25",
+      "0x26"
+    ],
+    "same_actor_is_not_same_key": true,
+    "cross_victim_success_demonstrated": false,
+    "generic_family_decryptor": false
+  },
+  "validation": {
+    "known_plaintext_pairs": 5,
+    "verification": "full-content equality and original SHA-256 in this incident",
+    "independent_victim_validation": null,
+    "known_limit": "One interleaved/repeated-encryption weekly backup was not completely recovered."
+  },
+  "warnings": [
+    "Initialization generates fresh session material. Same actor, sample hash or suffix does not establish a matching key.",
+    "Only same-session or actually reused/matching master material can benefit; no cross-victim success is claimed.",
+    "A matching footer marker or repeated nonce is only a screening check, not plaintext authentication.",
+    "Operate on independent copies. Require known-original full SHA-256 or appropriate complete format/application validation.",
+    "Anyone possessing matching incident ciphertext can decrypt it using this published material.",
+    "Raw RAM, malware, business data, credentials and other unpublished key candidates are not included."
+  ],
+  "instructions": "../docs/key-sharing.md"
+}

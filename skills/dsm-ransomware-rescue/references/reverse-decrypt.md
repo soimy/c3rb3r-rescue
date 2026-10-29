@@ -44,6 +44,6 @@ REA/Ghidra 静态流程：打开派生文件 → 查字符串和调用引用 →
 
 重复 footer 不意味着按顺序解密两次即可。10/22 大备份出现两组 key 交错影响不同区域，候选数据库在中间区域仍不确定；不能自动截掉 588 字节、伪造成功收据或把部分 gzip 输出导入数据库。
 
-脚本当前只处理 EOF 完整、尺寸一致、已验证标记与 0x20 模式，失败时不覆盖输入；新增输出校验失败会移除。本次真实密钥保存在私有目录，仓库和合成测试都不包含它。
+脚本当前只处理 EOF 完整、尺寸一致、已验证标记与 0x20 模式，失败时不覆盖输入；新增输出校验失败会移除。原始密钥仍在只读封存区，完整仓库另按所有者授权发布一份 `profiles/recovery-key-20261028.json` 会话恢复候选。它不是通用密钥，未验证跨受害者适用；合成测试不读取它。公开材料的使用及限制见[仓库密钥说明](https://github.com/soimy/c3rb3r-rescue/blob/main/docs/key-sharing.md)。
 
 公开向量来源：[Botan ChaCha vectors](https://github.com/randombit/botan/blob/master/src/tests/data/stream/chacha.vec)。逆向算法与布局的证据来自本地样本、反编译和真实明密文对照。

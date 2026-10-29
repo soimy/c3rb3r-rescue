@@ -1,6 +1,6 @@
 # 封存与保管
 
-本地仓库 `private/` 为敏感保管区，Git 显式忽略它。GitHub 公开仓库只存方法和脱敏结果。每次发布前都检查 Git 暂存区，而不是只相信 .gitignore。后续物理机路径的合成测试日志放在另一个被忽略的 `local-validation/`，不改动旧检查点。
+本地仓库 `private/` 为敏感保管区，Git 显式忽略它。GitHub 公开仓库保存方法和脱敏结果；后来另获明确授权的一份恢复候选见[密钥说明](key-sharing.md)，这一例外不包含原始证据。每次发布前都检查 Git 暂存区，而不是只相信 .gitignore。后续物理机路径的合成测试日志放在另一个被忽略的 `local-validation/`，不改动旧检查点。
 
 本轮封存了 352 份既有证据文件、一个 16 GiB RAM 副本和本次对话的完整行前缀。原始样本、解包派生文件、REA snapshot/证据包、反编译 C、日志 tar、盘点 JSONL、密钥候选、已知明密文、解密/恢复收据和历史脚本都在这 352 份文件中。
 
@@ -49,4 +49,4 @@ python3 skills/dsm-ransomware-rescue/scripts/seal_evidence.py verify private/evi
 python3 skills/dsm-ransomware-rescue/scripts/seal_evidence.py verify local-validation/attack-path-sealed-20261029
 ```
 
-新增的完整上下文仍含敏感信息和载荷片段，不进入 Git。公共仓库仅发布 [调查报告](attack-path.md)、[证据索引](attack-path-evidence.json)和方法；本检查点也不能替代原始 RAM、离线介质或可信时间戳。
+新增的完整上下文仍含敏感信息和载荷片段，不进入 Git。这次攻击路径检查点只对外发布 [调查报告](attack-path.md)、[证据索引](attack-path-evidence.json)和方法；本检查点也不能替代原始 RAM、离线介质或可信时间戳。随后单独发布的恢复候选不改变本检查点或旧封存内容。
