@@ -21,7 +21,7 @@
 ## 阅读入口
 
 - [事件过程与证据边界](docs/incident-report.md)
-- [攻击路径调查及 Reddit 新线索](docs/attack-path.md)
+- [攻击路径：日志、RAM 结构与漏洞判断](docs/attack-path.md) · [可复核证据索引](docs/attack-path-evidence.json)
 - [封存布局、保管和重验](docs/evidence-seal.md)
 - [工具验证记录](docs/toolkit-validation.md)
 - [物理机采集与失败分流](skills/dsm-ransomware-rescue/references/physical-memory.md)

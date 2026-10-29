@@ -36,3 +36,17 @@ python3 skills/dsm-ransomware-rescue/scripts/seal_evidence.py verify private/evi
 只读权限可减少误操作，不能抵御拥有者重新 chmod、管理员篡改或底层设备损坏。清单摘要为可复核基线，不是数字签名、可信时间戳或链路外证明。没有获取所有数据盘镜像，没有卸载/冻结源文件系统，没有停止 PVE VM；现场隔离和恶意进程暂停状态需要继续维护。
 
 保留私有区时也应限制整机访问和备份权限。不要把 private 目录作为压缩附件上传到 GitHub issue、Release、聊天或云端扫描服务。
+
+## 2026-10-29 攻击路径补充检查点
+
+本轮只读取既有 RAM 与日志，没有改动上述 `private/` 检查点。新增工作材料位于被 Git 忽略的 `local-validation/attack-path-followup-20261029/`，已独立复制到 `local-validation/attack-path-sealed-20261029/`：**373 个文件，58,739,038 字节**，逐文件复制、读回核对后设为文件 0400、目录 0500。
+
+新增 SEAL 清单 SHA-256：`5ec4807850f7df900431f3591bb90278ad8e891e1f9f7205bfa93c464ef85cc7`。
+
+该检查点包含 84 个日志分析输入及来源目录、25 个标记的完整 RAM 命中索引、有界原始片段、LZO 候选输出、残留日志表解析、一次性分析脚本、128 项核对收据及脱敏报告副本。首次重复扫描 RAM 的本地分析进程被中断以减少重复读取，随后单遍扫描完整完成并重新通过原 RAM 摘要；这一过程也留有记录。它不是一次新的现场采集。
+
+```sh
+python3 skills/dsm-ransomware-rescue/scripts/seal_evidence.py verify local-validation/attack-path-sealed-20261029
+```
+
+新增的完整上下文仍含敏感信息和载荷片段，不进入 Git。公共仓库仅发布 [调查报告](attack-path.md)、[证据索引](attack-path-evidence.json)和方法；本检查点也不能替代原始 RAM、离线介质或可信时间戳。

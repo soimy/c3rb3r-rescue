@@ -1,0 +1,471 @@
+{
+  "schema_version": 1,
+  "updated": "2026-10-29",
+  "timezone": "Asia/Shanghai",
+  "conclusion": {
+    "hypothesis": "DSM login-plugin environment injection consistent with CVE-2024-10441",
+    "confidence": "high",
+    "end_to_end_execution_chain_proven": false,
+    "original_attacker_ip_identified": false
+  },
+  "ram": {
+    "bytes": 17179869184,
+    "sha256": "0f72eb4f7c65ed868ceffcf69b06c1b97bcc49b13323b947f08ba09da6d73883",
+    "live_acquisition": true,
+    "atomic_snapshot": false,
+    "offset_convention": "zero-based offsets in captured pc.ram file, not GPA or process VA"
+  },
+  "log_scope": {
+    "total_inputs": 84,
+    "decoded_bytes": 57099487,
+    "decrypted_inputs": 68,
+    "captured_plain_members": 13,
+    "post_footer_append_inputs": 3,
+    "line_convention": "1-based bytes.splitlines(keepends=True); hashes include original line endings",
+    "authenticity_warning": "Hashes and decoding checks do not authenticate compromised-host logs."
+  },
+  "evidence": [
+    {
+      "id": "E01",
+      "observed_time": "2026-10-28T08:39:24+08:00",
+      "kind": "cross-material byte equality",
+      "source": {
+        "file_id": "018.log",
+        "origin": {
+          "kind": "decrypted-copy",
+          "path": "private/evidence-20261028/rea-recovery.XboPbczs/pairs/log-validation/018.decrypted-copy",
+          "archive_member": "var/log/auth.log.L0CK3D"
+        },
+        "decoded_bytes": 1887758,
+        "decoded_sha256": "a72fd719f3f51ce80613cfd1eccaa046052fafa3d6169215135c7e2a7c3fbb3c",
+        "xz_crc_rechecked": false
+      },
+      "anchor": {
+        "line_1_based": 14732,
+        "bytes_including_line_ending": 167,
+        "sha256": "2fd4082341d42ae345488a8c997665527908a48339708494f8b930d3d5e05468"
+      },
+      "ram_file_offset": "0x375c3ccc",
+      "same_bytes_in_ram": true,
+      "summary": "PAM failure in DSM SYNO.API.Auth login PID 15201; recorded source was NAT gateway, not attributed to attacker."
+    },
+    {
+      "id": "E02",
+      "observed_time": "2026-10-28T08:39:29.312774+08:00",
+      "kind": "partially validated residual syslog-ng-compatible NVTable",
+      "region": {
+        "file_offset": "0x2932af000",
+        "bytes": 16384,
+        "sha256": "5d5157e9b2050739a18e3a1639d6323401c37edc379c5f248bd1fdba48b34582"
+      },
+      "table_header_file_offset": "0x2932b03d0",
+      "table_header": {
+        "size": 3488,
+        "used": 1940,
+        "index_size": 19,
+        "num_static_entries": 9,
+        "ref_count_byte": 0
+      },
+      "indexed_fields": [
+        {
+          "handle": 482,
+          "name": ".SDATA.journald._SYSTEMD_UNIT",
+          "value_bytes": 16,
+          "value_sha256": "48678275bc8e6f218aeda6bd146428191ca39cbbdc1ce42968ec43fdb5e1cb66",
+          "entry_file_offset": "0x2932b0d6c",
+          "value": "synoscgi.service"
+        },
+        {
+          "handle": 506,
+          "name": ".SDATA.journald.MESSAGE",
+          "value_bytes": 317,
+          "value_sha256": "3d3648d6d1c65c3715511c9cecc352ec4a8463d0088d0cc9a61099bb38d26811",
+          "entry_file_offset": "0x2932b0a78"
+        },
+        {
+          "handle": 508,
+          "name": ".SDATA.journald._PID",
+          "value_bytes": 5,
+          "value_sha256": "ac92418ce76958c8e5a2db66912e634865bdcc710727e821864b04ba21bd07ec",
+          "entry_file_offset": "0x2932b0f08",
+          "value": "15201"
+        },
+        {
+          "handle": 529,
+          "name": ".SDATA.journald.SYSLOG_PID",
+          "value_bytes": 5,
+          "value_sha256": "ac92418ce76958c8e5a2db66912e634865bdcc710727e821864b04ba21bd07ec",
+          "entry_file_offset": "0x2932b0f44",
+          "value": "15201"
+        },
+        {
+          "handle": 533,
+          "name": ".SDATA.journald._SOURCE_REALTIME_TIMESTAMP",
+          "value_bytes": 16,
+          "value_sha256": "620e79d29f858e2c2b91b10416687b14824da46c0b602a30a04d08c6574952af",
+          "entry_file_offset": "0x2932b0a30",
+          "value": "1793147969312774"
+        }
+      ],
+      "direct_same_page_fields_validated": 12,
+      "summary": "Injected login text, PID, time and unit are reachable through one residual table index. Cross-page entries were not validated; this is not an authenticated journal record."
+    },
+    {
+      "id": "E03",
+      "observed_time": null,
+      "kind": "damaged plugin-argument remnant",
+      "region": {
+        "file_offset": "0x2d3210000",
+        "bytes": 16384,
+        "sha256": "c9d413fc0e19de5cc9dcdc9a56314b0084b826f4d3d33f3bb4cb9d59a92b1168"
+      },
+      "summary": "Login post-processing argument markers and failed result coexist with injection. No complete HTTP request or reliable client IP recovered from this fragment."
+    },
+    {
+      "id": "E04",
+      "observed_time": null,
+      "kind": "bounded strict LZO candidate decompression",
+      "decoder_version": "2.10",
+      "decoder_library_sha256": "e2393a71f43c0b11b46b252ad48f628e66fbedcafb28d631b55838ccc6146f1c",
+      "frames": [
+        {
+          "source_file_offset": 7697689256,
+          "compressed_bytes": 1263,
+          "compressed_sha256": "396b88ac3799bb351211087979808c4ed4b40885e66e1bd481868dd6b2082e57",
+          "bytes": 4096,
+          "sha256": "daadf493ae7e1671f10659324631caaedc9aa6ca99af7ca2d7e53019e0add966",
+          "decoder": "lzo1x_decompress_safe",
+          "decoder_status": 0,
+          "marker_hits": [
+            "15536:"
+          ]
+        },
+        {
+          "source_file_offset": 13190674408,
+          "compressed_bytes": 447,
+          "compressed_sha256": "3ba6ca940d7a369c35d6e9526afa80ff517e8f31b64f6331be49322604c7de1c",
+          "bytes": 4096,
+          "sha256": "83d915f7c4a5470638774fcce8d59fcecd086ff0ceed1a6ac339aad6ac62dcd6",
+          "decoder": "lzo1x_decompress_safe",
+          "decoder_status": 0,
+          "marker_hits": [
+            "15536:"
+          ]
+        },
+        {
+          "source_file_offset": 14556894216,
+          "compressed_bytes": 737,
+          "compressed_sha256": "4e3dd544a0298bd6f99d62decb946be77289702ee3ddadee73a4df2975ff50ea",
+          "bytes": 4096,
+          "sha256": "1146fd2c9186a1764284a203ab22b2c4648d7036fddc46e870c89120db443c03",
+          "decoder": "lzo1x_decompress_safe",
+          "decoder_status": 0,
+          "marker_hits": [
+            "15534:"
+          ]
+        }
+      ],
+      "encoded_launcher_suffix_match": {
+        "bytes_matched": 53,
+        "known_encoded_bytes": 56,
+        "missing_prefix_not_reconstructed": true
+      },
+      "summary": "PID 15534 linker finalization output and PID 15536 fragments. No independent checksum, complete cron file, zram-slot ownership or process mapping established."
+    },
+    {
+      "id": "E05",
+      "kind": "original rm log command records",
+      "source": {
+        "file_id": "074.log",
+        "origin": {
+          "kind": "captured-archive-member",
+          "archive": "private/evidence-20261028/dsm-log-evidence.tar",
+          "archive_sha256": "95acfc868142024efd3e7adc21de43f3f8ba62e927d5308c0fc6ea1d5b50c7a4",
+          "member": "var/log/rm.log.1.xz"
+        },
+        "decoded_bytes": 1637305,
+        "decoded_sha256": "1a9908a07fc00c1d3197d15ce27ea0a56c2466c5ae873db4c2e63a749e957f8d",
+        "xz_crc_rechecked": true
+      },
+      "events": [
+        {
+          "observed_time": "2026-10-28T08:40:07+08:00",
+          "pid": 17377,
+          "uid": 0,
+          "euid": 0,
+          "targets": [
+            "/etc/cron.d/synotgkk.15534",
+            "/etc/cron.d/synotgkk.15535",
+            "/etc/cron.d/synotgkk.15536",
+            "/etc/cron.d/synotgkk.15537"
+          ],
+          "anchor": {
+            "line_1_based": 6762,
+            "bytes_including_line_ending": 191,
+            "sha256": "2b1403029de13be60cddefc852e072b974410bfb9a94a0e2040458f312bba3a6"
+          }
+        },
+        {
+          "observed_time": "2026-10-28T08:47:23+08:00",
+          "pid": 25246,
+          "uid": 0,
+          "euid": 0,
+          "targets": [
+            "/bin/l0ck.enc"
+          ],
+          "anchor": {
+            "line_1_based": 6763,
+            "bytes_including_line_ending": 91,
+            "sha256": "44db8adddd15792ca9b9d1e6d9cbeea989ee082d1832e09c3d19486c898e49cb"
+          }
+        }
+      ],
+      "summary": "rm -f invocation records do not alone prove target existence, successful unlink, or scheduled execution."
+    },
+    {
+      "id": "E06",
+      "observed_time": "2026-10-28T08:46:47+08:00",
+      "time_source": "preserved incident process observation; time not inferred from the RAM string",
+      "kind": "observed process plus matching argv remnant",
+      "pid_from_incident_observation": 21871,
+      "ram_argv": {
+        "file_offset": "0x3cfc8df2d",
+        "bytes": 19,
+        "sha256": "9b6ee049d3c0e406d48d38b2b8545399a7580389c436121bc63304088e922e89",
+        "tokens": [
+          "/bin/libgld",
+          "-n",
+          "308"
+        ],
+        "separator": "NUL"
+      },
+      "environment_fields_observed": {
+        "USER": "root",
+        "PWD": "/tmp",
+        "SHELL": "/bin/sh",
+        "SHLVL": "3"
+      },
+      "summary": "RAM fragment is consistent with observed process arguments; task_struct ownership and parent execution chain were not reconstructed."
+    },
+    {
+      "id": "E07",
+      "kind": "plaintext appended after encrypted footer",
+      "time_start": "2026-10-28T08:48:10+08:00",
+      "time_end": "2026-10-28T08:48:59+08:00",
+      "source": {
+        "file_id": "083.log",
+        "origin": {
+          "kind": "append-after-footer",
+          "path": "private/evidence-20261028/rea-recovery.XboPbczs/pairs/log-validation/019.append-after-footer"
+        },
+        "decoded_bytes": 847855,
+        "decoded_sha256": "9451cca7122456513d89f1d9c70786555109dc20d600948c5f79fd8acf100119",
+        "xz_crc_rechecked": false
+      },
+      "anchors": [
+        {
+          "line_1_based": 1,
+          "bytes_including_line_ending": 197,
+          "sha256": "782656b14867a4c7f75d2045a51d790efda0d3d2f5b806885210fee9fc78ac7c"
+        },
+        {
+          "line_1_based": 2,
+          "bytes_including_line_ending": 108,
+          "sha256": "19d90ba48367383bc40aeac254f92c5467fba6fa6fff526c396b57a26cf8f80a"
+        },
+        {
+          "line_1_based": 5,
+          "bytes_including_line_ending": 269,
+          "sha256": "2f389900721b762f650a68586e0bd63f731efb587165377d337bfaa607dac87a"
+        },
+        {
+          "line_1_based": 18,
+          "bytes_including_line_ending": 327,
+          "sha256": "a884294831f3f08c276dfb91f3aaad0ff4266296ee42694a814828529fc2bcce"
+        },
+        {
+          "line_1_based": 21,
+          "bytes_including_line_ending": 324,
+          "sha256": "fad914f40223478ba565fc40eaee249fca7176f781aa14adc8431af1a167f827"
+        },
+        {
+          "line_1_based": 43,
+          "bytes_including_line_ending": 263,
+          "sha256": "3d528c15e6bc0448698a2ac487dc5000351747fc7166f1661aadb1fcb523731b"
+        }
+      ],
+      "summary": "Drive, Photos and index service failures after encryption; one record names libsynosyncserver.so.L0CK3D. Supports damage aftermath, not initial vulnerability trigger."
+    },
+    {
+      "id": "E08",
+      "kind": "preserved version observation",
+      "observed_time": "2026-10-29T09:59:21+08:00",
+      "source": "private/receipts/dsm-sealing-observation.txt",
+      "sha256": "522ce789daec9bd470cba4b70bba777497d90c6d57f73d2f796c3e5790c38cd7",
+      "version_markers": {
+        "major": "7",
+        "minor": "2",
+        "build": "64561",
+        "smallfix": "0"
+      },
+      "summary": "Both VERSION files reported this build; not binary patch attestation."
+    }
+  ],
+  "ram_search": {
+    "algorithm": "single pass 64 MiB chunks with longest-marker overlap",
+    "markers": [
+      {
+        "marker": "PLUGIN_VALUE_END",
+        "count": 9,
+        "truncated": false
+      },
+      {
+        "marker": "LD_DEBUG_OUTPUT",
+        "count": 10,
+        "truncated": false
+      },
+      {
+        "marker": "/etc/cron.d/synotgkk",
+        "count": 5,
+        "truncated": false
+      },
+      {
+        "marker": "synotgkk",
+        "count": 870,
+        "truncated": false
+      },
+      {
+        "marker": "104.253.175.125",
+        "count": 0,
+        "truncated": false
+      },
+      {
+        "marker": "xdy5.sh",
+        "count": 0,
+        "truncated": false
+      },
+      {
+        "marker": "/bin/libgld",
+        "count": 4,
+        "truncated": false
+      },
+      {
+        "marker": "/usr/bin/libgld",
+        "count": 1,
+        "truncated": false
+      },
+      {
+        "marker": "libgld -n",
+        "count": 0,
+        "truncated": false
+      },
+      {
+        "marker": "l0ck.enc",
+        "count": 1,
+        "truncated": false
+      },
+      {
+        "marker": "init-rsysd.lo",
+        "count": 8,
+        "truncated": false
+      },
+      {
+        "marker": "/webapi/auth.cgi",
+        "count": 0,
+        "truncated": false
+      },
+      {
+        "marker": "api=SYNO.API.Auth",
+        "count": 0,
+        "truncated": false
+      },
+      {
+        "marker": "api%3DSYNO.API.Auth",
+        "count": 0,
+        "truncated": false
+      },
+      {
+        "marker": "LD_PRELOAD%3D",
+        "count": 0,
+        "truncated": false
+      },
+      {
+        "marker": "account=admin%0A",
+        "count": 0,
+        "truncated": false
+      },
+      {
+        "marker": "account=admin%0a",
+        "count": 0,
+        "truncated": false
+      },
+      {
+        "marker": "15534:",
+        "count": 2,
+        "truncated": false
+      },
+      {
+        "marker": "15535:",
+        "count": 0,
+        "truncated": false
+      },
+      {
+        "marker": "15536:",
+        "count": 2,
+        "truncated": false
+      },
+      {
+        "marker": "15537:",
+        "count": 0,
+        "truncated": false
+      },
+      {
+        "marker": "SYNO.API.Auth_7_login[15201]",
+        "count": 1,
+        "truncated": false
+      },
+      {
+        "marker": "(root) CMD",
+        "count": 0,
+        "truncated": false
+      },
+      {
+        "marker": "qnetd",
+        "count": 0,
+        "truncated": false
+      },
+      {
+        "marker": "encoded-launcher",
+        "count": 4,
+        "truncated": false
+      }
+    ],
+    "limits": "Fixed ASCII byte search only; encoded, compressed, NUL-separated or overwritten data can evade these markers. Repeated hits are not distinct events."
+  },
+  "verification": {
+    "assertions_passed": 128,
+    "all_passed": true,
+    "private_receipt": "local-validation/attack-path-followup-20261029/verification.json",
+    "warning": "Does not prove log authenticity or a complete execution chain."
+  },
+  "ioc": {
+    "defanged_download": "hxxp://104[.]253[.]175[.]125/xdy5[.]sh",
+    "decoded_launcher_bytes": 41,
+    "decoded_launcher_sha256": "d912350a99fe2005dcf992cfdba2a4980fe7f30d865abe18fe50e492a2fb9a54",
+    "download_endpoint_is_not_attributed_source_ip": true,
+    "packed_sample_sha256": "802ac85d19dc6db2b1849bb3499877280544d04a0ae94d4c408b6c321669903d"
+  },
+  "remaining_gaps": [
+    "Original exploit HTTP request and ingress hostname/port",
+    "Complete original cron contents and creation/exec audit",
+    "Contemporaneous xdy5.sh body and successful transfer record",
+    "Process ancestry connecting login/plugin/cron/download to libgld",
+    "Pre-NAT attacker address, actor identity and exfiltration evidence"
+  ],
+  "primary_references": [
+    "https://www.synology.com/en-global/security/advisory/Synology_SA_24_20",
+    "https://www.rapid7.com/cdn/assets/bltad0709de42b54e82/689604359f008cdd02f69917/disguise-delimit-whitepaper.pdf",
+    "https://raw.githubusercontent.com/syslog-ng/syslog-ng/syslog-ng-3.37.1/lib/logmsg/nvtable.h"
+  ],
+  "publication": "Sanitized metadata only; raw RAM, logs, payload bytes and recovery keys excluded."
+}
