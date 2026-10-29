@@ -1,0 +1,4 @@
+interface:
+  display_name: "DSM 勒索事件救援"
+  short_description: "保全 DSM 勒索现场、离线内存密钥恢复、副本解密与 GitLab 验收"
+  default_prompt: "Use $dsm-ransomware-rescue to preserve the evidence, assess recoverability, and validate recovery on independent copies."

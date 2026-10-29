@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-29",
+  "runtime": {"python": "3.12.14", "numpy": "2.3.5", "cryptography": "50.0.2"},
+  "unit_tests": {"run": 16, "failures": 0, "errors": 0},
+  "archive_self_test": "passed",
+  "skill_structure_validation": "passed",
+  "real_offline_replay": {
+    "ram_bytes": 17179869184,
+    "ram_sha256": "0f72eb4f7c65ed868ceffcf69b06c1b97bcc49b13323b947f08ba09da6d73883",
+    "master_candidates": 1,
+    "master_matches_preserved_material": true,
+    "file_objects": 23,
+    "known_plaintext_pairs_byte_equal": 5,
+    "daily_backup_bytes": 173926400,
+    "daily_backup_sha256_matches": true,
+    "daily_backup_archive_integrity_pass": true,
+    "attack_regions_recarved_and_hash_matched": 3
+  },
+  "not_reperformed": [
+    "Live QEMU memory acquisition by the new parameterized collector",
+    "Real UPX invocation by the new unpacking wrapper",
+    "Full rehash or decryption of all external business backups",
+    "Authenticated GitLab UI, clone, LFS checkout, CI and production capacity tests"
+  ],
+  "private_receipts": "Kept locally; excluded from Git history",
+  "scope": "Synthetic tests and specified real offline replays; not a universal decryptor certification"
+}

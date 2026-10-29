@@ -1,0 +1,17 @@
+{
+  "name": "libgld-802ac85d-linux-x86_64",
+  "packed_sha256": "802ac85d19dc6db2b1849bb3499877280544d04a0ae94d4c408b6c321669903d",
+  "unpacked_sha256": "78d06b74827429f8b9947ac5940b15fb6e6f724386dcb04dc6f7eb6dcd41d3a4",
+  "ram_bytes": 17179869184,
+  "low_ram_end": 3221225472,
+  "high_ram_start": 4294967296,
+  "entry": {
+    "va": 4202384,
+    "hex": "31ed4989d15e4889e24883e4f0505449c7c090de460048c7c100de460048c7c760de430067e876b40600f40f1f440000c3662e0f1f8400000000000f1f440000"
+  },
+  "mode_va": 5504140,
+  "master_pointer_va": 5515256,
+  "session_pointer_va": 5515264,
+  "footer_marker": "ce35a593",
+  "limits": "Exact sample layout and observed 16-GiB pc.ram layout, not universal defaults."
+}

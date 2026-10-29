@@ -1,0 +1,16 @@
+/private/
+/.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+*.raw
+*.bin
+*.L0CK3D
+*.pem
+*.key
+*.log
+*.tar
+*.gz
+*.xz
+*.part
+*.partial
