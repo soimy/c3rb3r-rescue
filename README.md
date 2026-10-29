@@ -1,48 +1,50 @@
 # c3rb3r-rescue
 
-一次 DSM / GitLab 勒索事件的取证、内存密钥恢复和副本解密记录。目标是让下一次处置能够复现经过验证的步骤，同时保留失败和证据缺口。
+English | [简体中文](README_CN.md)
 
-本工具适用于已分析的 `libgld` 样本与文件格式，**不是 C3RB3R 家族的通用解密器**。样本 SHA-256：`802ac85d19dc6db2b1849bb3499877280544d04a0ae94d4c408b6c321669903d`。不包含恶意二进制、业务数据或可运行的入侵载荷。
+A forensic, memory-key recovery and copy-based decryption record for a DSM / GitLab ransomware incident. It documents reproducible, verified steps as well as failures and gaps in the evidence.
 
-**现按所有者授权公开一份真实的 [48 字节会话恢复候选](profiles/recovery-key-20261028.json)**，供其他受害者在副本上验证。它来自 RAM，不是攻击者的 RSA 私钥；只验证过本事件的文件，**没有跨受害者成功证据**。相同攻击者、样本或后缀不代表密钥相同。适用范围、导出命令和匹配方法见[密钥说明](docs/key-sharing.md)。
+The tools apply to the analyzed `libgld` sample and file format; they are **not a universal C3RB3R decryptor**. Sample SHA-256: `802ac85d19dc6db2b1849bb3499877280544d04a0ae94d4c408b6c321669903d`. No malicious binary, business data or executable intrusion payload is included.
 
-**首要目标是保住仍在内存中的解密材料。** 在阻止继续加密并保留管理通道后，尽早采集可取得的进程内存和整机 RAM；不要等全盘盘点、漏洞归因或完整反编译做完才 dump。不要为清理恶意程序先 kill、重启、升级系统或启动另一张救援盘。内存采集不能保证一定有可用密钥，但失去这份易失证据后，本案的恢复路径可能不再成立。
+**With the owner's authorization, one real [48-byte session recovery candidate](profiles/recovery-key-20261028.json) is published** for other victims to test on copies. It came from RAM and is not the attacker's RSA private key. It has been verified only against files from this incident; **there is no evidence of success across victims**. The same attacker, sample or extension does not imply the same key. See [key sharing](docs/key-sharing.md) for scope, export and matching instructions.
 
-本案成功来自 **PVE 来宾 RAM**。新增的[物理机 Linux / DSM 采集指南](skills/dsm-ransomware-rescue/references/physical-memory.md)覆盖进程映射、AVML 和 LiME；物理 DSM 整机采集尚未实机验收，不能把本次 VM 成功外推到所有设备。
+**The first priority is to preserve decryption material still in memory.** After stopping further encryption and preserving a management channel, capture available process memory and system RAM as early as possible; do not wait for a full inventory, vulnerability attribution or complete reverse engineering. Do not kill the malware, reboot, upgrade the system or boot another rescue disk first. Memory capture does not guarantee a usable key, but losing this volatile evidence may foreclose the recovery path used here.
 
-## 交给 AI 使用
+This incident's success came from **PVE guest RAM**. The [physical Linux / DSM capture guide](skills/dsm-ransomware-rescue/references/physical-memory.md) covers process mappings, AVML and LiME. Whole-system capture on physical DSM has not been validated on a real device; the VM result cannot be generalized to all devices.
 
-可把仓库 URL 和下面这段任务说明交给助手；先提供系统/架构、是否仍开机、可用管理通道和现有授权范围，**不要发送密码、真实密钥、完整内存或业务文件**：
+## Using this repository with an AI assistant
 
-> 阅读 README 与 skills/dsm-ransomware-rescue/SKILL.md。以保住易失密钥为优先，确认当前机器是虚拟机还是物理机，区分进程内存和整机 RAM。先调查可用权限、暂停状态、目标存储和采集兼容性，再在现有授权内采取适用的步骤。保留原始文件、独立副本和校验收据；不要执行样本、自动加载不匹配的内核模块或重启受灾机。只对副本尝试解密，分别报告已验证结果、猜测和未覆盖范围。
+Give the assistant the repository URL and the task below, along with the system and architecture, whether it is still running, available management channels and the scope of authorization. **Do not send passwords, real keys, complete memory dumps or business files.**
 
-症状相同不证明样本、会话或密钥相同。当前解密器还检查本案会话尾标记；其他事件须重新验证布局及标记，不能通过删除校验强行运行。参见[密钥复用与分享](docs/key-sharing.md)。
+> Read the README and skills/dsm-ransomware-rescue/SKILL.md. Prioritize preservation of volatile keys. Establish whether the machine is virtual or physical and distinguish process memory from whole-system RAM. First investigate available permissions, process stop state, destination storage and capture compatibility, then take appropriate steps within existing authorization. Preserve originals, independent copies and verification receipts. Do not execute the sample, automatically load an incompatible kernel module or reboot the affected machine. Attempt decryption only on copies and report verified results, hypotheses and coverage gaps separately.
 
-本次结果：16 GiB 内存副本中找到可用的 48 字节主材料；五组已知明密文逐字节一致。10/24 的约 49 GiB 周备份与历史摘要一致，随后在隔离的同版本 GitLab 中恢复出 80 个项目、23 个用户、16 个群组和 9253 个 LFS 对象。仓库、secrets、LFS、附件和 artifacts 检查通过，登录页返回 200。10/22 的另一份周备份存在交错重复加密，仍未完整恢复。新发现的内存日志高可信指向 DSM 登录插件环境注入、与 CVE-2024-10441 一致，尚缺少完整请求和执行链。
+Similar symptoms do not establish that the sample, session or key is the same. The current decryptor also checks this incident's session footer marker. Other incidents require the layout and marker to be verified again; do not remove checks to force it to run. See [key reuse and sharing](docs/key-sharing.md).
 
-## 阅读入口
+Results: usable 48-byte master material was found in a 16 GiB memory copy; five known plaintext/ciphertext pairs matched byte for byte. The approximately 49 GiB October 24 weekly backup matched its historical digest and was restored in an isolated GitLab instance of the same version: 80 projects, 23 users, 16 groups and 9,253 LFS objects. Repository, secrets, LFS, attachment and artifact checks passed, and the login page returned 200. Another weekly backup from October 22 remains incompletely recovered due to interleaved repeated encryption. Newly discovered memory logs strongly point to DSM login-plugin environment injection consistent with CVE-2024-10441; the complete request and execution chain are still missing.
 
-- [事件过程与证据边界](docs/incident-report.md)
-- [攻击路径：日志、RAM 结构与漏洞判断](docs/attack-path.md) · [可复核证据索引](docs/attack-path-evidence.json)
-- [封存布局、保管和重验](docs/evidence-seal.md)
-- [工具验证记录](docs/toolkit-validation.md)
-- [物理机采集与失败分流](skills/dsm-ransomware-rescue/references/physical-memory.md)
-- [密钥层级、复用与公开边界](docs/key-sharing.md)
-- [可复用 skill](skills/dsm-ransomware-rescue/SKILL.md)：保全、RAM、REA 逆向、盘点、解密、GitLab 验收。
+## Documentation
 
-## 本地与 GitHub 的边界
+- [Incident and evidence boundaries](docs/incident-report.md)
+- [Attack path: logs, RAM structures and vulnerability assessment](docs/attack-path.md) · [verifiable evidence index](docs/attack-path-evidence.json)
+- [Evidence sealing, custody and verification](docs/evidence-seal.md)
+- [Tool validation](docs/toolkit-validation.md)
+- [Physical-machine capture and failure paths](skills/dsm-ransomware-rescue/references/physical-memory.md)
+- [Key hierarchy, reuse and publication boundaries](docs/key-sharing.md)
+- [Reusable skill](skills/dsm-ransomware-rescue/SKILL.md) (Chinese): preservation, RAM, REA reverse engineering, inventory, decryption and GitLab validation.
 
-GitHub 仓库公开，保存脱敏记录、skill、源码、合成测试、样本布局参数，以及上述单独授权的恢复候选。每次发布仍检查 Git 暂存区；该授权不涵盖其他密钥、账号凭据、完整 RAM 或业务数据。
+## Local and GitHub boundaries
 
-`private/` 被 Git 忽略，保存本机证据副本、内存 dump、其余密钥候选、原始日志、对话快照和保管清单。**Git clone 包含单独发布的候选，但不包含这些私有证据，也不能重建其他会话的密钥。** 大体积业务密文和恢复备份仍在救援 NAS，位置和既有校验收据由本地索引记录，不复制到 Git 历史。
+The public GitHub repository contains sanitized records, the skill, source code, synthetic tests, sample layout parameters and the separately authorized recovery candidate above. Inspect the Git index before each publication; that authorization does not cover other keys, credentials, complete RAM or business data.
 
-这是逻辑封存：独立副本、逐文件摘要、落盘重读、只读权限和来源记录。没有做全盘取证镜像，没有将运行中的 DSM 变为不可变磁盘快照，也没有将联网 NAS 称为离线备份。
+Git ignores `private/`, which holds local evidence copies, memory dumps, other key candidates, raw logs, conversation snapshots and custody inventories. **A Git clone contains the separately published candidate, but none of this private evidence, and cannot reconstruct keys from other sessions.** Large business ciphertexts and recovered backups remain on the rescue NAS; a local index records their locations and existing verification receipts, without copying them into Git history.
 
-## 使用
+This is logical sealing: independent copies, per-file digests, read-back verification, read-only permissions and provenance records. No full-disk forensic image was made, the running DSM was not turned into an immutable disk snapshot, and the networked NAS is not described as an offline backup.
 
-工具目录：`skills/dsm-ransomware-rescue/scripts/`。分析环境 Python 3.11+；实际回归环境为 Python 3.12，NumPy / cryptography 版本见 `requirements.txt`。DSM 元数据盘点和新增进程采集器只需标准库 Python 3.8+；不要为了运行解密器升级受灾系统。
+## Usage
 
-在干净的分析机建立环境：
+Tools live in `skills/dsm-ransomware-rescue/scripts/`. The analysis environment requires Python 3.11+; regression tests were run with Python 3.12. See `requirements.txt` for NumPy and cryptography versions. DSM metadata inventory and the process collector require only the Python 3.8+ standard library; do not upgrade an affected system to run the decryptor.
+
+Set up a clean analysis machine:
 
 ```sh
 python3 -m venv .venv
@@ -51,7 +53,7 @@ PYTHONPATH=skills/dsm-ransomware-rescue/scripts:scripts .venv/bin/python -m unit
 .venv/bin/python skills/dsm-ransomware-rescue/scripts/verify_backup.py --self-test
 ```
 
-单文件解密，输入必须是独立密文副本，输出必须不存在：
+For single-file decryption, the input must be an independent ciphertext copy and the output must not already exist:
 
 ```sh
 .venv/bin/python skills/dsm-ransomware-rescue/scripts/decrypt_copy.py \
@@ -62,23 +64,23 @@ PYTHONPATH=skills/dsm-ransomware-rescue/scripts:scripts .venv/bin/python -m unit
   --expected-sha256 KNOWN_ORIGINAL_SHA256
 ```
 
-没有历史摘要时可省略最后一个参数，但成功退出只证明结构检查接受了候选，不证明文件完整。随后完整读取归档、校验 CRC/PACK/LFS，并进行应用层恢复。不要把 `--copy-root` 指向受灾原卷。
+The last argument may be omitted if no historical digest exists, but a successful exit only means structural checks accepted the candidate; it does not prove file integrity. Read the entire archive, verify CRC/PACK/LFS, and perform an application-level restore. Do not point `--copy-root` at the affected original volume.
 
 ```sh
 .venv/bin/python skills/dsm-ransomware-rescue/scripts/verify_backup.py /analysis/recovered/example.tar
 ```
 
-该验证器会输出进度与最终 JSON；已判失败的归档退出非零。JSON 语法、PGDMP 文件头及 PACK 摘要各有明确边界，不能替代应用验收。
+The verifier reports progress and final JSON, and exits nonzero for archives it determines have failed. JSON syntax, PGDMP headers and PACK digests each have limits and do not replace application acceptance.
 
-skill 可随整个目录复制到个人 skills 目录；其脚本、布局参数和参考文档均包含在目录内。此仓库创建过程没有自动更改用户的全局 skill 或 SSH 配置。
+The whole skill directory can be copied to a personal skills directory; it includes its scripts, layout parameters and references. Creating this repository did not automatically change the user's global skills or SSH configuration.
 
-## 发布前
+## Before publication
 
-只暂存经过审查的源码和文档，再检查 Git 暂存区：
+Stage only reviewed source and documentation, then inspect the Git index:
 
 ```sh
 python3 scripts/check_publish.py --repo . --master-file /analysis/private/master.bin
 git diff --cached --stat
 ```
 
-检查器拒绝私有目录、二进制、链接、常见凭据和未获授权的已知主材料表示。唯一例外绑定到已审阅的公开候选记录的精确路径与完整文件摘要；修改该记录或将材料复制到其他文件仍会拒绝。它不是完整 DLP；人工检查仍需确认没有复制真实日志、客户路径、配置值或解密内容。
+The checker rejects private directories, binaries, links, common credentials and unauthorized representations of known master material. The sole exception is tied to the exact path and complete file digest of the reviewed public candidate; modifying that record or copying the material elsewhere is still rejected. It is not a complete DLP solution: manually confirm that real logs, customer paths, configuration values and decrypted content have not been copied.

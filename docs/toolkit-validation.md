@@ -1,57 +1,59 @@
-# 工具验证与已知限制
+# Tool validation and known limitations
 
-整理日期：2026-10-29。业务恢复结果来自现场收据；参数化脚本又做了独立重放。合成测试不会读取真实密钥，也不会执行恶意样本。
+English | [简体中文](toolkit-validation_CN.md)
 
-## 测试范围
+Compiled 2026-10-29. Business recovery results come from on-site receipts; the parameterized scripts were independently replayed. Synthetic tests do not read real keys or execute malware.
 
-- ChaCha8：两组公开向量；64 位 counter 进位、调用长度、短块余流丢弃、全文件/首段/分段边界。
-- 副本解密：合成密文恢复、错误 master/IV、历史 SHA 不符、追加 footer、0x21 诱饵、硬链接、符号链接、已有输出；失败不会覆盖原件。
-- 元数据：不追随符号链接，补扫列表数量来自参数，挂载与根约束保留。
-- 归档：嵌套 gzip、两种 LFS OID 路径、PACK 摘要、非零尾部、已知原始 SHA 强制比较和失败退出码。
-- 保全：独立复制与读回、目录重用拒绝、文件篡改检测、RAM 范围短读、现有输出拒绝、片段边界和源摘要。
-- 页表：合成 x86-64 user page tables、代码签名、PCI hole 转换、unsupported VA 拒绝、敏感候选权限。
-- 发布：暂存区私有路径、非普通 blob、已知 key 编码阻断；不会在错误信息中输出 secret。
-- 解包包装器：拒绝未审阅输入、mock 解包派生、保留原样本、拒绝覆盖及只清理自己创建的输出。
+## Test coverage
 
-测试入口：
+- ChaCha8: two public vectors; 64-bit counter carry, call lengths, discarded short-block remainder and whole-file/first-segment/segmented boundaries.
+- Copy decryption: synthetic ciphertext recovery, wrong master/IV, historical SHA mismatch, appended footer, 0x21 decoy, hard and symbolic links, and existing output; failures do not overwrite originals.
+- Metadata: no following symbolic links, rescan-list count from parameters, and retained mount/root constraints.
+- Archives: nested gzip, two LFS OID paths, PACK digests, nonzero trailing data, required comparison to known original SHA and failure exit codes.
+- Preservation: independent copy and read-back, refusal to reuse a directory, tampering detection, short RAM range reads, existing-output refusal, fragment boundaries and source digests.
+- Page tables: synthetic x86-64 user page tables, code signatures, PCI hole conversion, unsupported VA rejection and permissions on sensitive candidates.
+- Publication: staged private paths, non-regular blobs and known key encodings are blocked; errors do not print secrets.
+- Unpack wrapper: rejects unreviewed inputs, mock unpacking and derivation, retains the original sample, rejects overwrites and cleans only outputs it created.
+
+Test entry points:
 
 ```sh
 PYTHONPATH=skills/dsm-ransomware-rescue/scripts:scripts python3 -m unittest discover -s tests -v
 python3 skills/dsm-ransomware-rescue/scripts/verify_backup.py --self-test
 ```
 
-完整测试记录保存在本地 `private/receipts/`，发布验证摘要记录实际测试数与环境。skill 通过官方 quick_validate 前言/结构检查；这不等于所有处置决策都由机器验证。
+Complete test records are in local `private/receipts/`; the published validation summary records actual test counts and environment. The skill passed the official quick_validate front matter/structure check; this does not mean all response decisions have been machine-validated.
 
-初始 16 项单元测试全部通过。物理机路径扩展后共 21 项：macOS 运行 20 项通过，跳过依赖 Linux /proc 的 1 项；隔离 Linux 容器执行进程内存子集 5 项全部通过，包含该实际读取测试。机器可读的结果范围见 [validation-summary.json](validation-summary.json)。归档自检单独执行，不合并到单元测试数量。
+The initial 16 unit tests passed. After the physical-machine extension there were 21: 20 passed on macOS and one Linux /proc-dependent test was skipped; all five process-memory subset tests passed in an isolated Linux container, including the actual read test. See [validation-summary.json](validation-summary.json) for machine-readable scope. The archive self-test is run separately and not counted as a unit test.
 
-## 物理机流程扩展的验证
+## Validation of the physical-machine extension
 
-新增测试覆盖 PID 重用/线程非 T/附加 tracer 拒绝、目标设备与样本摘要不符、缺页保留及后续页面读取、独占新输出、异常时保留部分证据，以及进程映射中的签名/模式/摘要/空洞验证。
+New tests cover PID reuse, non-T threads and an attached tracer; destination-device and sample-digest mismatches; preserving missing pages and reading later pages; exclusive new output; preserving partial evidence on exceptions; and signature, mode, digest and hole checks in process mappings.
 
-Linux 测试在本机 OrbStack 的独立 ARM64 容器进行：断网、根文件系统只读、无额外 capabilities、不挂载原始证据。测试只创建并暂停一个无害 Python 子进程，完整调用进程采集器，随后从保存的 VA 映射读回预置文本，并验证目标仍为 T。测试结束只杀掉这个测试自己创建的子进程，不操作任何受灾 PID。
+Linux tests ran in a separate ARM64 container on local OrbStack: no network, read-only root filesystem, no extra capabilities and no raw evidence mounted. Tests created and stopped only a harmless Python child, invoked the process collector end to end, read a preset string back from the saved VA mapping, and verified that the target remained T. At the end they killed only their own test child, never an affected PID.
 
-这验证了真实 Linux /proc 读取和保持暂停的行为，**不等于物理 DSM 的内核/权限适配，也不是 AVML / LiME 的整机采集验证**。真实样本的进程 VA 提取器目前使用合成布局验证；历史 RAM 中的真实主材料重放仍属于原 QEMU 路径。
+This verifies real Linux /proc reads and preservation of the stopped state; **it is not physical DSM kernel/permission compatibility or whole-system AVML / LiME validation**. The real-sample process-VA extractor currently has synthetic-layout validation; replay of real master material from historical RAM remains the original QEMU path.
 
-本次日志位于 Git 忽略的 local-validation/，不会修改已经只读封存的 private/ 检查点。该阶段只发布了工具源码与测试；随后单独授权的候选发布见下文。
+Logs for this phase are in Git-ignored `local-validation/` and do not change the read-only sealed `private/` checkpoint. This phase published only source and tests; the subsequently separately authorized candidate release is described below.
 
-## 会话候选发布验证（2026-10-29）
+## Session candidate publication validation (2026-10-29)
 
-从公开候选 JSON 经 `export_public_key.py` 导出后，与原封存 48 字节逐字节一致。5 组真实明密文重新验证通过，源密文摘要未改变；记录保存在被忽略的 `local-validation/public-key-release-20261029/validation.json`。没有跨受害者样本验证。
+After export from the public candidate JSON through `export_public_key.py`, the material matched the original sealed 48 bytes byte-for-byte. Five real plaintext/ciphertext pairs passed again and source ciphertext digests were unchanged. The record is in ignored `local-validation/public-key-release-20261029/validation.json`. No cross-victim samples were validated.
 
-导出器及发布保护的 11 项定向测试通过，覆盖材料格式/长度/摘要错误、拒绝覆盖、拒绝输出符号链接，以及“只有授权路径和完整文件摘要同时匹配才可豁免已知主材料检查”。改动未修改解密算法，不把这次定向测试称为所有平台验收。
+Eleven focused tests of the exporter and publication guard passed, covering invalid material format/length/digest, refusal to overwrite or output a symbolic link, and exemption of known master material only when both the authorized path and full file digest match. The change did not modify the decryption algorithm; these focused tests are not all-platform acceptance.
 
-## 真实离线重放
+## Real offline replay
 
-16 GiB RAM 传输与目的全文读回匹配原采集 SHA。重新运行参数化 key 提取工具，得到一个主材料候选和 23 个文件对象；主材料与原先保全的 48 字节逐字节一致，没有将其值写进日志。
+Transfer and full destination read-back of 16 GiB RAM matched the original capture SHA. The parameterized key extractor was rerun and found one master-material candidate and 23 file objects. The master material matched the previously preserved 48 bytes byte-for-byte; its value was not logged.
 
-使用重新提取的候选再次解密五组真实文件，全部匹配已知原件 SHA 和字节内容。对一份约 166 MiB 的已恢复每日备份再次做原始 SHA 与归档检查；它是数据库为主的备份，不代替完整周备份验收。
+Five real files decrypted again with the re-extracted candidate matched known original SHAs and bytes. An approximately 166 MiB recovered daily backup was checked again against its original SHA and archive integrity; it is primarily a database backup and does not replace acceptance of the full weekly backup.
 
-初次重验曾使用旧版系统 Python，`hashlib.file_digest` 不可用。发布版改为复用现有的流式摘要函数，避免该可选 API 依赖；失败记录与后续成功记录分开保留。
+The first recheck used an older system Python without `hashlib.file_digest`. The published version now reuses the existing streaming digest function to avoid that optional API dependency; failed and later successful receipts are kept separately.
 
-## 未重做的操作
+## Operations not repeated
 
-新 RAM 采集器没有再次读取在线 QEMU 内存；其范围读取使用合成测试，原始 16 GiB live 采集文件与历史脚本记录另行封存。没有为了测试而发送漏洞请求、恢复恶意进程或联系 IOC 地址。
+The new RAM collector did not reread live QEMU memory. Its range reads use synthetic tests; the original 16 GiB live capture and historical script records are separately sealed. No exploit request was sent, malware resumed or IOC address contacted for testing.
 
-新 UPX 包装器没有再次运行真实 UPX；本次环境未找到已安装的可信 UPX，测试使用受控 mock。原始 packed/派生样本和 REA 证据仍保留；未把 mock 结果写成实际解包成功。
+The new UPX wrapper did not rerun real UPX: no installed trusted UPX was found in this environment, so tests used a controlled mock. Original packed/derived samples and REA evidence remain preserved; the mock is not reported as a successful real unpack.
 
-没有重新解密/完整重哈希所有业务备份，没有完成中途加密文件和交错双层加密周备份的恢复，也没有复验 GitLab 的真实 clone、浏览器登录、CI 或生产容量。原实例恢复成功与这些未决项在报告中分别描述。
+Not all business backups were decrypted or fully rehashed again; recovery of files interrupted during encryption and the interleaved double-encrypted weekly backup remains incomplete. Real GitLab clone, browser login, CI and production capacity were not revalidated. The successful isolated-instance restore and these open items are reported separately.

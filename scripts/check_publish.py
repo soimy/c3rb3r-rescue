@@ -14,7 +14,7 @@ import re
 import subprocess
 
 ALLOWED_ROOTS = {'scripts', 'tests', 'docs', 'profiles', 'skills'}
-ALLOWED_FILES = {'.gitignore', 'README.md', 'requirements.txt', 'AGENTS.md'}
+ALLOWED_FILES = {'.gitignore', 'README.md', 'README_CN.md', 'requirements.txt', 'AGENTS.md'}
 SUFFIXES = {'.py', '.md', '.txt', '.json', '.yaml'}
 # The owner expressly authorized publishing this recovery candidate on 2026-10-29.
 # Changing the path or any byte requires a separately reviewed publication decision.

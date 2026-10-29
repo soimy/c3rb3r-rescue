@@ -10,7 +10,7 @@ description: Preserve volatile keys during DSM or Linux ransomware incidents on 
 ## 阶段与工具
 
 - 现场仍在线、需要保留远程管理或内存：读 [保全与内存](references/containment-memory.md)。`scripts/capture_qemu_ram.py` 只读取显式选定的 QEMU RAM 映射；`scripts/seal_evidence.py` 复制并核对已稳定的证据目录。
-- 物理机 Linux / DSM：读 [物理机内存](references/physical-memory.md)。已知且暂停的目标可先用 `capture_process_memory.py` 保存进程映射，再按内核条件选择 AVML / LiME 整机采集。`recover_process_key.py` 仅从已保存映射提取当前样本布局的候选；不把进程 dump 说成完整 RAM。
+- 物理机 Linux / DSM：读 [物理机内存](references/physical-memory_CN.md)。已知且暂停的目标可先用 `capture_process_memory.py` 保存进程映射，再按内核条件选择 AVML / LiME 整机采集。`recover_process_key.py` 仅从已保存映射提取当前样本布局的候选；不把进程 dump 说成完整 RAM。
 - 样本分析、页表与密钥、明密文对照：读 [逆向与解密](references/reverse-decrypt.md)。使用已安装的 REA 静态分析工具；先发现实际工具 schema。`scripts/recover_ram_keys.py` 和 `scripts/decrypt_copy.py` 使用本次样本已验证布局，不能自动扩展到新样本。
 - 文件覆盖范围、硬链接、备份格式：读 [盘点与校验](references/inventory-verify.md)。`scripts/inventory.py` 仅统计元数据；`scripts/verify_roots.py` 预检人工审阅的 NUL 路径清单；`scripts/verify_backup.py` 不解包到文件系统。
 - GitLab 恢复实例：读 [隔离恢复](references/gitlab-restore.md)。真实配置、版本、权限和宿主能力需现场重新发现。

@@ -1,62 +1,64 @@
-# 事件过程与恢复结论
+# Incident timeline and recovery conclusions
 
-本记录整理于 2026-10-29，时间统一使用 Asia/Shanghai。环境地址、人员与业务路径已去标识化。阶段性旧报告保留在本地封存区；本文件综合后续结果，不把早期未验证假设重复作为结论。
+English | [简体中文](incident-report_CN.md)
 
-## 发现与止损
+Compiled on 2026-10-29; all times are Asia/Shanghai. Addresses, people and business paths have been de-identified. Earlier interim reports remain in the local sealed archive; this document incorporates later results without repeating early unverified hypotheses as conclusions.
 
-管理员访问 DSM 后发现套件和系统日志异常。多个目录出现 `.L0CK3D`、`read-me3.txt`；root 进程 `/bin/libgld -n 308` 大量打开业务文件，可执行映射显示原文件已删除。先请求 STOP，最初仍为 D；之后核对为 T，CPU 时间停止增长。通过 `/proc/PID/exe` 保全样本。
+## Discovery and containment
 
-原有 Cloud Sync 和 Drive ShareSync 也被暂停，SMB 被临时阻断。公司网络经跨站点路由/NAT 访问，直接断网会失去 SSH，因此先验证 PVE Console，再在虚拟化桥上限制到已确认的管理连接和必要 ARP。其他来宾、路由器和现有业务没有因取证被重置。
+After accessing DSM, the administrator found abnormal packages and system logs. Multiple directories contained `.L0CK3D` and `read-me3.txt`; root process `/bin/libgld -n 308` had opened many business files, and its executable mapping showed the original file had been deleted. STOP was requested; initially the process remained in D state, later it was confirmed in T state and CPU time stopped increasing. The sample was preserved through `/proc/PID/exe`.
 
-后续 DHCP 地址失效时，保留隔离规则，从 Console 添加临时 IPv4 恢复取证通道。没有为重连打开 DSM 的互联网或共享访问。受灾 VM 直通 HBA，PVE 快照不能被当作直通数据盘的完整备份；看到 Docker Btrfs 层也没有宣称存在可用业务快照。
+Cloud Sync and Drive ShareSync were also paused and SMB temporarily blocked. The company network reached the system through cross-site routing/NAT, so disconnecting it outright would lose SSH. The PVE Console was verified first, then the virtualization bridge restricted to confirmed management connections and necessary ARP. Other guests, the router and existing workloads were not reset for the investigation.
 
-封存时重新读取现场：恶意进程及三个同步进程仍为 T；PVE VM 仍运行，桥隔离规则保留。这是受控在线现场，不是关机镜像或所有磁盘冻结状态。没有在本轮封存中恢复恶意进程、重启 DSM 或执行新载荷。
+When the DHCP address later expired, isolation rules were retained and a temporary IPv4 address was added from the Console to restore the forensic channel. Internet and shared access to DSM were not opened for reconnection. The affected VM had an HBA passed through, so a PVE snapshot could not be treated as a complete backup of the passed-through data disks; Docker Btrfs layers were not claimed to be usable business snapshots.
 
-## 盘点与入口调查
+At sealing, the scene was checked again: the malicious process and three synchronization processes remained in T state, the PVE VM was still running, and bridge isolation rules remained. This was a controlled live scene, not a powered-off image or a state in which all disks were frozen. The malware was not resumed, DSM was not rebooted, and no new payload was executed during sealing.
 
-保全系统、认证、nginx、任务调度、GitLab 日志及调度数据库。元数据首扫之后补扫被 Btrfs 设备边界跳过的子卷，再补根分区遗漏目录。保留每次扫描范围、错误和硬链接别名，避免把后缀统计当作真实完整性。
+## Inventory and entry-point investigation
 
-已确认日志记录了 root 在 08:40:07 对四个 `/etc/cron.d/synotgkk.<PID>` 执行 `rm -f`，08:47:23 对 `/bin/l0ck.enc` 执行清理命令。这类命令记录不单独证明文件存在或删除成功。开始只据此确认操作线索，未确认入口。登录失败日志、NAT 地址和包含 gitlab 字样的静态文件探测都不足以证明 GitLab RCE。
+System, authentication, nginx, scheduler and GitLab logs and the scheduler database were preserved. After the first metadata scan, Btrfs subvolumes skipped at device boundaries and missed root-partition directories were scanned separately. Each scan's scope, errors and hard-link aliases were retained; extension counts were not treated as proof of integrity.
 
-10/29 根据用户提供的 Reddit 线索重新搜索既有 RAM，发现约 08:39:29 的 DSM 登录处理记录和带有同名 cron 路径的环境注入内容。结合现场 DSM 7.2-64561 Update 0 版本标记，**目前证据高可信指向 DSM 登录插件环境注入、与 CVE-2024-10441 技术链一致**。它替代了“极可能是 GitLab 新漏洞”的早期猜测；仍缺少完整 HTTP 请求、原 cron 文件及完整进程创建链，详见 [攻击路径](attack-path.md)。
+Logs confirmed root ran `rm -f` against four `/etc/cron.d/synotgkk.<PID>` paths at 08:40:07 and a cleanup command against `/bin/l0ck.enc` at 08:47:23. Such command records alone do not prove the files existed or deletion succeeded. Initially they established leads, not an entry point. Failed-login logs, NAT addresses and static-file probes containing “gitlab” do not prove GitLab RCE.
 
-同日的进一步复核把解密 auth.log 中 08:39:24、PID 15201 的一整行与 RAM 原文逐字节对上，并通过残留 NVTable 索引关联约五秒后的注入正文、PID 和时间字段。定向 LZO 解压补出了 PID 15534/15536 的链接器输出残片，但没有拼接为完整 cron 或下载脚本。08:48 的 footer 后追加日志记录了 Drive、Photos 等崩溃及已带加密后缀的库名，支持部分套件异常属于加密后的损坏。新增原始片段和分析过程另建检查点，旧封存未改动。
+On October 29, a renewed search of existing RAM prompted by a user-provided Reddit lead found a DSM login-processing record around 08:39:29 and environment-injection content with the same cron paths. Together with the on-site DSM 7.2-64561 Update 0 version marker, **the evidence now strongly points to DSM login-plugin environment injection consistent with CVE-2024-10441**. This supersedes the earlier guess that a new GitLab vulnerability was very likely. The full HTTP request, original cron file and complete process-creation chain remain missing; see [attack path](attack-path.md).
 
-## 静态逆向与 RAM
+Further review that day matched the entire 08:39:24 PID 15201 line in decrypted auth.log byte-for-byte to RAM, and associated the injection body about five seconds later with PID and time fields through a residual NVTable index. Targeted LZO decompression recovered linker-output fragments for PIDs 15534/15536 but did not reconstruct a complete cron or download script. Logs appended after the encrypted footer at 08:48 recorded Drive, Photos and other crashes and library names already carrying the encryption extension, supporting encryption damage as the cause of some package failures. New raw fragments and analysis were stored in a separate checkpoint; the earlier seal was not changed.
 
-原始样本：462312 字节，SHA-256 `802ac85d19dc6db2b1849bb3499877280544d04a0ae94d4c408b6c321669903d`。
-脱壳派生 ELF：1319024 字节，SHA-256 `78d06b74827429f8b9947ac5940b15fb6e6f724386dcb04dc6f7eb6dcd41d3a4`。
+## Static reverse engineering and RAM
 
-REA/Ghidra 反编译和反汇编共同确定 ChaCha8、48 字节 AES-CBC key record、588 字节 footer、0x20/0x21 模式差异和文件分段算法。原分析证据、反编译 C、反汇编、布局和快照全部封存；样本未运行。
+Original sample: 462,312 bytes, SHA-256 `802ac85d19dc6db2b1849bb3499877280544d04a0ae94d4c408b6c321669903d`.
+Unpacked derived ELF: 1,319,024 bytes, SHA-256 `78d06b74827429f8b9947ac5940b15fb6e6f724386dcb04dc6f7eb6dcd41d3a4`.
 
-从 QEMU 的 live RAM 映射采集 16 GiB，历时约 90 秒；没有暂停来宾，因此有时间一致性限制。RAM SHA-256：`0f72eb4f7c65ed868ceffcf69b06c1b97bcc49b13323b947f08ba09da6d73883`。
+REA/Ghidra decompilation and disassembly together identified ChaCha8, a 48-byte AES-CBC key record, a 588-byte footer, differences between modes 0x20/0x21 and the file segmentation algorithm. Original analysis evidence, decompiled C, disassembly, layouts and snapshots were sealed; the sample was not executed.
 
-用 ELF 入口代码签名定位页表，处理 PCI hole 的文件偏移/GPA 差别，再读取全局指针指向的 `IV16 + AES-key32`。保留一个可用主材料候选及 23 个符合文件对象结构的候选；后者尚未用于恢复全部正在加密的文件。
+A 16 GiB live RAM mapping was captured from QEMU in approximately 90 seconds. The guest was not paused, so capture has temporal consistency limits. RAM SHA-256: `0f72eb4f7c65ed868ceffcf69b06c1b97bcc49b13323b947f08ba09da6d73883`.
 
-五组真实明密文对照覆盖全文件、首 1 MiB、分段模式，全部逐字节一致。68 份日志产生恢复正文；23 份 XZ 完整解压/CRC 通过；一个文本文件仍有异常字节，三个 footer 后追加日志单独保全。
+An ELF entry-code signature located page tables, the PCI hole's file-offset/GPA difference was handled, and `IV16 + AES-key32` was read from the global pointer. One usable master-material candidate and 23 candidates matching the file-object structure were retained; the latter have not been used to recover all files that were being encrypted.
 
-## GitLab 数据恢复
+Five real plaintext/ciphertext pairs covering whole-file, first-1-MiB and segmented modes all matched byte-for-byte. Recovered text was produced for 68 logs; 23 XZ files passed full decompression/CRC. One text file still had abnormal bytes, and three logs appended after footers were preserved separately.
 
-155 个唯一加密源文件被独立保全，107153215749 字节；生成 154 个解密副本，54655941301 字节。去重依据源 device/inode，保留硬链接别名。覆盖的是指定 GitLab 备份/配置范围，未完成所有 NAS 共享的全盘恢复。
+## GitLab data recovery
 
-36 个文件匹配历史摘要，2 个额外文件有归档完整性证明，116 个候选需要相应应用层确认。这一分级描述该批次完成时的状态，之后周备份进行了独立的整体验收。
+155 unique encrypted source files were independently preserved, totaling 107,153,215,749 bytes; 154 decrypted copies totaling 54,655,941,301 bytes were produced. Deduplication used source device/inode and retained hard-link aliases. This covered selected GitLab backup/configuration data, not recovery of all NAS shares.
 
-10/24 周备份（约 48.89 GiB）匹配历史 SHA，完整 TAR/gzip、78 个 Git bundle 的 PACK 校验和、9253 个 LFS OID 校验通过。78 个 bundle 不等于项目数量。七份每日数据库备份也匹配历史摘要，但不包含完整仓库/LFS，不能独立恢复项目。
+36 files matched historical digests, two more had archive integrity evidence, and 116 candidates needed corresponding application-level confirmation. This classification describes the state at the end of that batch; the weekly backup subsequently underwent separate overall acceptance.
 
-10/22 周备份有两组 key 交错作用的证据。候选数据库部分区段可匹配，后续区段不唯一；完整原始摘要没有通过，没有发布为成功恢复文件。
+The October 24 weekly backup (about 48.89 GiB) matched its historical SHA and passed complete TAR/gzip, PACK checksum checks for 78 Git bundles and checks of 9,253 LFS OIDs. 78 bundles do not imply 78 projects. Seven daily database backups also matched historical digests, but lack complete repositories/LFS and cannot independently restore projects.
 
-## 隔离实例验收
+The October 22 weekly backup showed evidence of two interleaved keys. Some database sections matched a candidate, but later sections were not uniquely determined. The complete original digest did not match, and it was not published as successfully recovered.
 
-在家中 DSM 建立全新 GitLab CE 19.5.1，使用固定官方镜像摘要和新写配置。源备份只读挂载，独立工作副本经完整读回 SHA 验证；先确认空数据库再导入。全程无网络、无发布端口，Sidekiq 关闭。
+## Isolated instance acceptance
 
-期间修复三个实际操作问题：DSM 无 CFS quota，改用经核实的 CPUSet；预检字段应为 `CPUSet` 而非 `Cpuset`；镜像自带 curl 通过 PATH 调用，不能写死不存在的 `/usr/bin/curl`。所有失败日志保留，不覆盖记录。
+A fresh GitLab CE 19.5.1 instance was established on a home DSM using a pinned official image digest and newly written configuration. The source backup was mounted read-only and an independent working copy verified by full read-back SHA; the database was confirmed empty before import. The instance had no network or published ports throughout, and Sidekiq was disabled.
 
-导入命令退出 0；恢复出 80 项目、23 用户、16 群组、9253 LFS 对象，与原 SQL 独立计数一致。secrets 检查 0 条受影响记录，80 项目 Git fsck、LFS、附件与 artifacts 检查均未报告失败，登录页最终 200。
+Three operational problems were fixed: DSM lacked CFS quota, so a verified CPUSet was used; the preflight field was `CPUSet`, not `Cpuset`; and the image's curl had to be invoked through PATH rather than the nonexistent `/usr/bin/curl`. Failed logs were retained without overwriting records.
 
-SQL 的 7 条扩展/schema ownership 提示及独立 ci 备份缺失提示保留并解释，没有授予应用账户超级权限。浏览器真实登录、clone/LFS checkout、包下载、CI/后台任务和生产容量仍未验收。原包跳过 builds、terraform_state、registry、pages；云端迁移之后的新提交保持独立，不覆盖。
+Import exited 0; 80 projects, 23 users, 16 groups and 9,253 LFS objects were restored, matching independent counts from the original SQL. The secrets check found zero affected records; Git fsck for all 80 projects and LFS, attachment and artifact checks reported no failures, and the login page eventually returned 200.
 
-## 本次整理的可复现结果
+Seven SQL extension/schema ownership notices and the missing separate ci backup notice were retained and explained; the application account was not granted superuser privileges. Real browser login, clone/LFS checkout, package downloads, CI/background jobs and production capacity have not been accepted. The source package skipped builds, terraform_state, registry and pages; commits made after cloud migration remain separate and are not overwritten.
 
-原始证据目录独立复制并逐文件读回，352 份文件有封存清单；16 GiB RAM 从既有采集文件复制到本机后再次完整读回校验。新的参数化脚本重新定位出相同主材料和 23 个文件对象；五组真实样本再次逐字节匹配。原始采集和部署脚本作为历史材料保留，发布版参数化工具与历史执行文件分开标识。
+## Reproducible results from this consolidation
 
-封存和发布并未完成物理全盘镜像、剩余数据解密或生产切换。业务大备份仍在救援 NAS，本地保存完整定位与已有校验收据，GitHub 不保存这些敏感数据。
+The original evidence directory was independently copied and read back file by file, with a seal inventory for 352 files. After copying the existing 16 GiB RAM capture locally, it was again verified by a full read-back. The new parameterized scripts relocated the same master material and 23 file objects; five real samples again matched byte-for-byte. Original capture and deployment scripts remain as historical material, separately identified from the published parameterized tools.
+
+Sealing and publication did not complete a physical full-disk image, decryption of remaining data or a production cutover. Large business backups remain on the rescue NAS, with full location information and existing verification receipts stored locally; GitHub does not hold this sensitive data.

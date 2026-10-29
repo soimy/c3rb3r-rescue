@@ -1,36 +1,38 @@
-# 同一个攻击者会复用同一把密钥吗？
+# Does the same attacker reuse the same key?
 
-不能以攻击者、文件后缀、赎金说明或相同二进制来判断密钥相同。恶意程序可以复用攻击者的公钥来包裹不同会话、不同文件的随机材料；公钥相同不意味着受害者持有同一把对称解密密钥，也不意味着已取得攻击者私钥。
+English | [简体中文](key-sharing_CN.md)
 
-## 本样本已经核实的层级
+An attacker, file extension, ransom note or identical binary cannot establish that keys are the same. Malware may use the attacker's public key to wrap different random materials for different sessions or files. The same public key does not mean victims share a symmetric decryption key or that the attacker's private key has been obtained.
 
-| 材料 | 本案证据 | 能恢复的范围 |
+## Hierarchy verified for this sample
+
+| Material | Evidence in this incident | Recovery scope |
 |---|---|---|
-| 文件 key32 + nonce8 | 文件上下文初始化 0x4232e0 分别调用随机生成包装器 | 对应文件/分段状态，不能假定用于全部文件 |
-| 主材料 IV16 + AES-key32 | RAM 全局指针 0x5427f8 指向 48 字节；0x20 模式可解开 footer 的文件记录 | 本次验证匹配的加密会话/文件集合 |
-| 公钥包裹记录 | footer 另有公钥包裹区 | 本方案没有获得攻击者 RSA 私钥，不以它作为恢复依据 |
+| File key32 + nonce8 | File-context initialization at 0x4232e0 calls the random-generation wrapper separately | The corresponding file/segment state; do not assume it applies to all files |
+| Master material IV16 + AES-key32 | RAM global pointer 0x5427f8 points to 48 bytes; mode 0x20 can unwrap the footer's file record | The validated matching session/file set in this incident |
+| Public-key-wrapped record | The footer has a separate public-key-wrapped area | This method did not obtain the attacker's RSA private key and does not depend on it |
 
-本轮补查保存的反汇编：初始化函数 0x4030ee 在 0x403162 请求 32 字节填充到 buffer+16，在 0x403198 请求 16 字节填充到 buffer，再经 0x438b12 存入全局指针；均调用 0x4414b1，后者转到随机输出实现 0x4420fa。初始化路径包含系统随机设备访问。程序主流程在 0x43e4da 调用这段初始化。
+A further review of the saved disassembly found initialization at 0x4030ee requesting 32 bytes for buffer+16 at 0x403162, then 16 bytes for the buffer at 0x403198, and storing it in the global pointer through 0x438b12. Both calls use 0x4414b1, which transfers to random output implementation 0x4420fa. The initialization path accesses a system random device. The main flow calls initialization at 0x43e4da.
 
-这支持“初始化时生成新的会话材料”，没有发现这里从固定常量或机器标识直接取得主材料。尚未对随机源全部失败路径、重复种子或所有启动模式做形式化证明，不能把“预期不同”说成“永远不可能复用”。0x438b5e 还包含清理该 48 字节缓冲的路径，进一步说明保住 live 内存的重要性。
+This supports generation of new session material at initialization; no direct use of a fixed constant or machine identifier for the master material was found here. Random-source failure paths, repeated seeds and all startup modes have not been formally proven, so “expected to differ” must not become “reuse is impossible.” A path at 0x438b5e also clears the 48-byte buffer, underscoring the importance of preserving live memory.
 
-补查也确认随机生成包装器返回失败时，初始化返回失败，主流程在 0x43e4df–0x43e4ed 走退出分支；未见这条路径改用一个固定的公共备用主密钥。这进一步支持每次正常启动的会话材料应不同，但不等于穷尽了所有随机实现或环境故障。
+The review also confirmed that failure of the random-generation wrapper causes initialization to fail and the main flow to take the exit branch at 0x43e4df–0x43e4ed. No fixed public fallback master key was found on this path. This further supports different session material for each normal start, but does not exhaust all random implementations or environmental failures.
 
-原始反汇编与样本保持本地封存。相同 SHA 的样本也需核对运行模式和会话尾标记，本仓库解密器不是跨会话自动适配器。
+The original disassembly and sample remain sealed locally. Even for a sample with the same SHA, check the operating mode and session footer marker; the repository decryptor does not automatically adapt across sessions.
 
-## 已授权公开的候选
+## Authorized public candidate
 
-公布密钥可能帮助相同会话、错误复用密钥或其他经验证匹配的受害者。但目前只有本事件的文件验证，没有跨受害者成功证据；也不能靠 footer 重复 nonce、四字节标记或“文件头看起来正常”认定匹配。
+Publishing a key may help victims in the same session, cases of accidental key reuse or other verified matches. Currently only this incident's files have been validated; there is no cross-victim success evidence. A repeated footer nonce, four-byte marker or normal-looking file header does not establish a match.
 
-2026-10-29，所有者明确要求分享恢复材料帮助其他受害者。本仓库现单独发布 [incident-20261028-master-01](../profiles/recovery-key-20261028.json)：**真实的 IV16 + AES-key32，共 48 字节**，以 hex 编码保存，附材料摘要、样本摘要、模式和限制。它从已保存 RAM 提取，不是单靠恶意二进制解包取得，更不是攻击者的 RSA 私钥。
+On 2026-10-29 the owner explicitly requested sharing recovery material to help other victims. This repository separately publishes [incident-20261028-master-01](../profiles/recovery-key-20261028.json): **real IV16 + AES-key32 material, 48 bytes total**, encoded as hex with material and sample digests, mode and limitations. It was extracted from saved RAM, not obtained solely by unpacking the malicious binary, and is not the attacker's RSA private key.
 
-发布前从该 JSON 导出材料，确认与原封存的 48 字节完全一致，再用 5 组已有明密文重新验证；全文件、首 1 MiB、分段模式均完整匹配。合成单元测试仍只使用合成材料。**这里没有据此宣称其他受害者已经匹配成功，也不承诺同一攻击者的其他感染能恢复。**
+Before publication, material exported from the JSON was confirmed byte-for-byte identical to the original sealed 48 bytes, then tested again against five existing plaintext/ciphertext pairs. Whole-file, first-1-MiB and segmented modes matched completely. Synthetic unit tests still use only synthetic material. **This does not claim a match for another victim or promise recovery from another infection by the same attacker.**
 
-公开会使持有本次匹配密文的人能够解密相关数据。此次授权仅覆盖这一份恢复候选；其他内存候选、GitLab secrets、账号/SSH 凭据、原始日志、业务文件和恶意程序均未发布。发布检查器只豁免该记录的精确路径和 SHA-256，不放宽整个私有目录或所有密钥的检查。
+Publication enables anyone holding matching ciphertext from this incident to decrypt the relevant data. The authorization covers this one candidate only; other memory candidates, GitLab secrets, account/SSH credentials, raw logs, business files and malware were not published. The publication checker exempts only the exact path and SHA-256 of this record, not the private directory or keys generally.
 
-## 在自己的副本上验证
+## Test on your own copy
 
-先保留原密文，并准备独立的救援副本；不要覆盖原文件或批量试写源卷。从仓库导出 48 字节文件，输出必须不存在：
+Preserve the original ciphertext and prepare an independent rescue copy. Do not overwrite originals or bulk-write to the source volume. Export the 48-byte file from the repository; the output must not exist:
 
 ```sh
 python3 scripts/export_public_key.py \
@@ -38,7 +40,7 @@ python3 scripts/export_public_key.py \
   --output /analysis/private/public-master.bin
 ```
 
-导出器检查记录格式、材料长度及摘要，以 0600 权限新建输出，不打印材料本身。摘要只能检测记录/导出错误，不能证明对你的文件适用。然后用一个有独立原始 SHA-256 的副本尝试：
+The exporter checks the record format, material length and digest, creates the output with 0600 permissions and does not print the material. The digest detects record/export errors; it does not prove applicability to your file. Then try a copy with an independently known original SHA-256:
 
 ```sh
 .venv/bin/python skills/dsm-ransomware-rescue/scripts/decrypt_copy.py \
@@ -49,10 +51,10 @@ python3 scripts/export_public_key.py \
   --expected-sha256 KNOWN_ORIGINAL_SHA256
 ```
 
-请把示例路径和摘要替换为自己的真实值，事先准备输出目录。材料只针对本案已分析的 `0x20` 模式和 `ce35a593` footer 标记。标记、大小或模式不符时，现有解密器会拒绝；应重新分析格式，不能删除校验强行运行。重复加密、未完成加密、footer 后追加内容需要另行处理。
+Replace the example paths and digest with your own values and prepare the output directory first. The material targets this incident's analyzed `0x20` mode and `ce35a593` footer marker. The decryptor rejects a mismatched marker, size or mode; analyze the format again rather than removing checks. Repeated encryption, incomplete encryption and content appended after the footer require separate handling.
 
-没有历史 SHA 时可不传最后一项，但输出只能称为候选，须继续做完整归档 CRC/PACK/LFS、已知原文或相应应用验证。nonce 重复检查通过、文件头正确或能打开一张图片，都不足以验证全部内容。失败时保存原件和错误，不把这份候选当作免除自己采集内存的理由。
+Without a historical SHA, omit the last argument, but call the output a candidate only. Continue with full archive CRC/PACK/LFS checks, known plaintext or application validation. A passing nonce-repeat check, correct header or image that opens does not validate the whole file. Preserve originals and errors on failure; this candidate is not a reason to forgo capturing your own memory.
 
-若协作验证，优先在对方本地执行，只共享验证结果或经授权的无敏感样本；不要要求上传整个 RAM、GitLab secrets 或私人文件。
+For collaborative validation, prefer running locally on the other party's machine and sharing only results or authorized non-sensitive samples. Do not request complete RAM, GitLab secrets or private files.
 
-专业渠道也可以协调经验证的恢复材料；例如 No More Ransom 收录按适用范围使用的解密工具和密钥资源。联系或提交任何样本需另行获得数据所有者授权，本仓库不会自动发送。[No More Ransom](https://www.nomoreransom.org/)
+Professional channels may also coordinate verified recovery material; for example, No More Ransom lists decryption tools and key resources with their applicable scope. Obtain separate data-owner authorization before contacting a service or submitting samples; this repository sends nothing automatically. [No More Ransom](https://www.nomoreransom.org/)

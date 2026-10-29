@@ -97,6 +97,7 @@ class PreservationTests(unittest.TestCase):
         scanner=Path(__file__).parents[1]/'scripts/check_publish.py'
         self.assertFalse(inspect_blob('scripts/check_publish.py',scanner.read_bytes(),'100644'))
         self.assertFalse(inspect_blob('docs/note.md',b'Use private storage.','100644'))
+        self.assertFalse(inspect_blob('README_CN.md',b'Safe documentation.','100644'))
 
     def test_unpack_never_executes_unreviewed_input(self):
         with tempfile.TemporaryDirectory() as t:

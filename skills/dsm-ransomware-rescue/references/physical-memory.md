@@ -1,32 +1,34 @@
-# 物理机 Linux / DSM：先保住密钥
+# Physical Linux / DSM: preserve keys first
 
-核对资料日期：2026-10-29。这里区分上游支持、合成测试、隔离 Linux 子进程测试和真正的物理设备验收。**本案实证仍是 PVE RAM；没有在物理 DSM 上验证 AVML 或加载 LiME。**
+English | [简体中文](physical-memory_CN.md)
 
-## 先选能立即保全的路径
+Sources checked on 2026-10-29. This guide distinguishes upstream support, synthetic tests, isolated Linux subprocess tests and acceptance on a real physical device. **This incident's demonstrated result remains PVE RAM; AVML and LiME module loading have not been validated on physical DSM.**
 
-| 当前条件 | 先做什么 | 得到什么 / 缺什么 |
+## First choose a path that can preserve evidence immediately
+
+| Current conditions | First action | What it provides / lacks |
 |---|---|---|
-| 已确认加密 PID，所有线程已暂停，能读其 mem | 保存进程映射、exe、身份和 maps；随后补整机采集 | 可直接寻址的用户态内容；缺内核、未映射残留、寄存器 |
-| PID 未知或已退出，整机工具已适配 | 尽早采集整机 RAM | 可能保留旧页和内核状态；不保证密钥尚存 |
-| 有可信 PVE 等带外主机权限 | 优先使用已经验证的宿主采集能力 | 不必为采集在受灾来宾安装工具 |
-| 物理机上用户态读 RAM 被拒绝 | 评估已适配并测试的内核模块 | 模块可崩溃系统；不能临时试错或强制加载 |
-| 已关机/重启 | 保留磁盘、已有 dump、swap/休眠等历史材料 | 已不是原现场的 live RAM；重新开机不能重建失去的内存 |
+| Encryption PID identified, all threads stopped, its mem readable | Save process mappings, exe, identity and maps; follow with whole-system capture | Directly addressable user-space content; lacks kernel, unmapped remnants and registers |
+| PID unknown or exited, whole-system tool already adapted | Capture system RAM as early as possible | May preserve old pages and kernel state; key survival is not guaranteed |
+| Trusted out-of-band host access, such as PVE | Prefer already validated host capture capability | No need to install capture tools in the affected guest |
+| User-space RAM read denied on physical machine | Assess a compatible, tested kernel module | A module can crash the system; do not experiment or force-load it on site |
+| Already powered off/rebooted | Preserve disks, existing dumps, swap/hibernation and other historical material | This is no longer original live RAM; restarting cannot reconstruct lost memory |
 
-内存优先不意味着放任加密继续跑。先核对恶意进程身份、暂停已明确的进程并检查所有线程，保留电源和受限管理通道。不要等待完整逆向才保存内存。不要 kill、恢复运行、swapoff、drop_caches、升级内核或从 USB 重启来“准备”采集。采集、读盘和页缓存本身也会改变 live 内存；已释放密钥尤其容易被覆盖。
+Prioritizing memory does not mean letting encryption continue. Verify the malicious process identity, stop the identified process and check all threads, while preserving power and a restricted management channel. Do not wait for full reverse engineering before saving memory. Do not kill or resume the process, run swapoff or drop_caches, upgrade the kernel or reboot from USB to “prepare” capture. Capture, disk reads and page cache activity also change live memory; freed keys are especially vulnerable to overwrite.
 
-## 最小现场预检
+## Minimal on-site preflight
 
-保存 `date -u`、`uname -a`、DSM VERSION/型号/平台、`/proc/meminfo`、`/proc/iomem`、`/proc/mounts`、`/proc/swaps`、`/proc/cmdline`、`/proc/sys/kernel/yama/ptrace_scope` 和可读的 lockdown 状态。缺失/拒绝也记录，不能据文件存在就认定可采集。工具先在干净机器核对版本、来源和 SHA；不在受灾机安装整套编译环境。
+Save `date -u`, `uname -a`, DSM VERSION/model/platform, `/proc/meminfo`, `/proc/iomem`, `/proc/mounts`, `/proc/swaps`, `/proc/cmdline`, `/proc/sys/kernel/yama/ptrace_scope` and readable lockdown state. Record missing files or access denials too; file existence alone does not establish that capture is possible. Check tool version, provenance and SHA on a clean machine first; do not install a complete build environment on the affected machine.
 
-目的目录应在已确认挂载、容量足够的独立取证介质。核对路径对应设备及空间，避免挂载失效后写进系统根分区；不要将几 GiB/几十 GiB dump 写入 tmpfs、/dev/shm 或未经核实的 /tmp。保存整机内存还可能需要两份独立副本和格式转换空间；进程采集按可读虚拟映射总量预估，不等于 RSS。低内存设备上的 Python 开销也要计入。
+The destination should be independent forensic media with a confirmed mount and sufficient space. Verify the device behind the path and free space to avoid writing to the system root if the mount fails. Do not write multi-GiB dumps to tmpfs, /dev/shm or an unverified /tmp. Whole-system memory may also require space for two independent copies and format conversion. Estimate process capture by total readable virtual mappings, not RSS; account for Python overhead on low-memory devices.
 
-每次采集先以 `mkdir -m 700` 创建全新 case 目录，创建失败就停止；不使用 `-p` 复用旧目录。外部工具未必拒绝覆盖，所有输出必须事先确认不存在，重试换一个新 case。有限时间内先取得易失内容，再在干净主机执行较重的读回、分析和长期封存。
+For each capture create a completely new case directory with `mkdir -m 700` and stop on failure; do not use `-p` to reuse an old directory. External tools may not refuse overwrites, so confirm all outputs are absent in advance and use a new case for retries. When time is limited, capture volatile content first, then do heavier read-back, analysis and long-term sealing on a clean host.
 
-## A. 先保存已暂停进程
+## A. Save a stopped process first
 
-Linux 的 `/proc/PID/mem` 可按虚拟地址读取，但受 ptrace 访问检查约束；root、容器中的 root 和拥有 CAP_SYS_PTRACE 并非在所有 Yama/LSM/namespace 策略下等价。拒绝时保存报错，不自动改 sysctl 或绕过策略。[Linux proc 手册](https://man7.org/linux/man-pages/man5/proc_pid_mem.5.html)、[Yama](https://docs.kernel.org/admin-guide/LSM/Yama.html)
+Linux `/proc/PID/mem` can be read by virtual address but is subject to ptrace access checks. Root, root in a container and CAP_SYS_PTRACE are not equivalent under all Yama/LSM/namespace policies. Record errors on denial; do not automatically change sysctl or bypass policy. [Linux proc manual](https://man7.org/linux/man-pages/man5/proc_pid_mem.5.html), [Yama](https://docs.kernel.org/admin-guide/LSM/Yama.html)
 
-下面是需要代入已核实参数的模板，目的父目录已准备好；sudo 密码只在操作者自己的终端输入：
+The following template requires verified values and a prepared destination parent directory; the operator enters any sudo password only in their own terminal:
 
 ```sh
 sudo python3 /opt/ir/capture_process_memory.py inspect --pid TARGET_PID
@@ -39,24 +41,24 @@ sudo python3 /opt/ir/capture_process_memory.py capture \
   --output /mnt/ir-evidence/CASE/process-new
 ```
 
-采集器只读 mem，不附加 debugger，不发送 STOP/CONT/KILL，不改变权限或加载模块。开始和边界处核对 PID start ticks、exe SHA、所有线程 T/无 tracer、maps 和目的设备；先收集私有匿名可写区、其他可写区，再收集剩余可读区。它不保证两次边界检查之间绝无瞬时恢复，其他进程也可能改变共享页；读 mem 可能调入已换出的页。
+The collector reads mem only: it does not attach a debugger, send STOP/CONT/KILL, change permissions or load modules. At the start and boundaries it checks PID start ticks, exe SHA, all threads T/no tracer, maps and destination device. It collects private anonymous writable regions first, then other writable regions, then remaining readable regions. It cannot guarantee there was no momentary resume between boundary checks; other processes may also modify shared pages, and reading mem may page swapped-out data back in.
 
-新目录必须不存在。每个文件保留起止 VA、SHA、读回验证和不可读页表；空洞在文件中为零占位，**不是采到的零内存**。退出 2 表示有缺页，完成的区域仍有价值；没有 capture.json 的中断目录只能按 regions.jsonl / failure.json 解释为部分采集。不会自动删除这些材料或覆盖重试。
+The new directory must not exist. Each file records start/end VA, SHA, read-back verification and unreadable pages. Holes are zero-filled placeholders, **not captured zero-valued memory**. Exit 2 indicates missing pages, but completed regions may still be useful. An interrupted directory without capture.json can only be interpreted as partial capture using regions.jsonl / failure.json. The tool does not automatically delete this material or overwrite on retry.
 
-进程输出不是 ELF core。转移到干净分析机、核对文件摘要后，可对相同已审阅样本运行：
+Process output is not an ELF core. After transferring to a clean analysis host and checking digests, the same reviewed sample can be analyzed with:
 
 ```sh
 python3 recover_process_key.py --capture /analysis/process-copy \
   --profile /analysis/libgld-802ac85d.json --output /analysis/private/new-candidate
 ```
 
-这是样本专用 VA 路径，只核对结构与候选，不能自动适配新二进制、PIE/ASLR 或不同 crypto 模式。所需字节缺页、摘要或代码签名不符就拒绝。用独立密文副本和历史明文摘要验证候选；不要把成功提取 48 字节写成成功解密。
+This sample-specific VA path checks structure and candidates only; it does not automatically adapt to a new binary, PIE/ASLR or different crypto mode. It rejects missing required bytes, mismatched digests or code signatures. Validate candidates with independent ciphertext copies and historical plaintext digests; successful extraction of 48 bytes is not successful decryption.
 
-## B. AVML 整机采集
+## B. AVML whole-system capture
 
-AVML 尝试受内核控制的内存源；lockdown 可使其不可用，不应为了它重启并关闭保护。固定并核对选用 release：本次查到 v0.21.0 有 acquire 子命令，以及 x86-64、aarch64、armv6b 命名资产；README 的旧架构概述不足以证明某台 ARM DSM 可用。CPU、字节序、内核访问和实际发布资产都需核实，不能把上游发行版测试当成 DSM 验收。[AVML v0.21.0](https://github.com/microsoft/avml/tree/v0.21.0)、[发布资产](https://github.com/microsoft/avml/releases/tag/v0.21.0)
+AVML tries kernel-controlled memory sources; lockdown can make them unavailable. Do not reboot and disable protection for it. Pin and verify the selected release: v0.21.0 was found to have an acquire subcommand and assets named for x86-64, aarch64 and armv6b. The README's older architecture overview does not establish usability on a particular ARM DSM. Check CPU, endianness, kernel access and actual release assets; upstream distribution testing is not DSM acceptance. [AVML v0.21.0](https://github.com/microsoft/avml/tree/v0.21.0), [release assets](https://github.com/microsoft/avml/releases/tag/v0.21.0)
 
-在可信、匹配架构的工具已就绪且目的为全新私有目录时：
+When a trusted, architecture-matched tool is ready and the destination is a new private directory:
 
 ```sh
 /opt/ir/avml --help
@@ -66,15 +68,15 @@ printf 'ACQUIRE_EXIT=%s\n' "$?"
 sha256sum /mnt/ir-evidence/CASE/ram-new.lime
 ```
 
-模板基于该 release 的未压缩 LiME 输出。保留 stderr、来源和退出状态，另在分析机读回校验。没有把命令存在或退出 0 视为覆盖所有 RAM；压缩输出要保留原件，离线转换独立副本。禁止使用自动删除/上传选项处理现场唯一副本。[固定版本说明](https://github.com/microsoft/avml/blob/v0.21.0/README.md)
+This template uses that release's uncompressed LiME output. Retain stderr, provenance and exit status, and verify by read-back on the analysis host. A command's existence or exit 0 is not proof that all RAM was covered. Preserve compressed output as original and convert an independent copy offline. Do not use automatic deletion/upload options on the only on-site copy. [Pinned version documentation](https://github.com/microsoft/avml/blob/v0.21.0/README.md)
 
-## C. LiME 与 DSM 专有内核
+## C. LiME and DSM vendor kernels
 
-LiME 是需加载到内核中的采集模块。优先 format=lime 保留物理地址范围；raw 拼接会丢失位置，padded 会包含地址洞。默认页面超时可能跳过其余范围，成功加载不等于完整采集。[LiME 参数](https://github.com/jtsylve/LiME)
+LiME is a capture module loaded into the kernel. Prefer format=lime to retain physical address ranges; raw concatenation loses positions and padded output includes address holes. Default page timeouts can skip remaining ranges; successful loading does not mean complete capture. [LiME parameters](https://github.com/jtsylve/LiME)
 
-在干净构建机准备匹配目标的架构、内核源码/配置、编译器、符号版本与模块签名条件，再于同配置测试机演练。DSM 型号的平台和厂商内核补丁很重要；只看 uname -r 或 vermagic 相同仍不足以证明安全。启用 CONFIG_MODVERSIONS 时，modules_prepare 不会生成所需的 Module.symvers。没有匹配材料、签名被拒或模块加载被禁时，停止这条路线，保留进程证据；不 insmod --force、不替换内核。[Synology 工具链](https://help.synology.com/developer-guide/compile_applications/download_dsm_tool_chain.html)、[Linux 外部模块](https://www.kernel.org/doc/html/latest/kbuild/modules.html)
+On a clean build host prepare the target-matched architecture, kernel source/configuration, compiler, symbol versions and module-signing requirements, then rehearse on a machine with the same configuration. DSM model platform and vendor kernel patches matter; matching uname -r or vermagic alone is insufficient to establish safety. With CONFIG_MODVERSIONS enabled, modules_prepare does not generate the required Module.symvers. If matching material is unavailable, signatures are rejected or module loading is disabled, stop this route and retain process evidence; do not use insmod --force or replace the kernel. [Synology toolchain](https://help.synology.com/developer-guide/compile_applications/download_dsm_tool_chain.html), [Linux external modules](https://www.kernel.org/doc/html/latest/kbuild/modules.html)
 
-以下仅用于已完成兼容性演练、已授权的加载，现场不可用于碰运气：
+The following is only for authorized loading after compatibility rehearsal; do not use it on site to take a chance:
 
 ```sh
 modinfo /opt/ir/lime-reviewed.ko
@@ -82,24 +84,24 @@ sudo insmod /opt/ir/lime-reviewed.ko "path=/mnt/ir-evidence/CASE/ram-new.lime fo
 printf 'ACQUIRE_EXIT=%s\n' "$?"
 ```
 
-保存模块 SHA、加载前后 dmesg、超时/跳过区间和实际文件摘要；不自动 rmmod 再重试。空间不足需网络采集时，先验证管理隧道与接收端；LiME TCP 默认可绑定全部接口，因此要求适配版本的 localhostonly=1 加受限 SSH 隧道，不在公司网或互联网裸露 RAM 端口。任何断流产物单独保留，禁止把两次 live 流续接成一个“完整 dump”。[LiME 采集说明](https://github.com/jtsylve/LiME/blob/master/docs/README.md)
+Save the module SHA, dmesg before/after loading, timed-out/skipped ranges and actual file digest; do not automatically rmmod and retry. If space requires network capture, first verify the management tunnel and receiver. LiME TCP may bind all interfaces by default, so require a compatible version's localhostonly=1 plus a restricted SSH tunnel; do not expose a RAM port on the company network or Internet. Preserve interrupted streams separately; never concatenate two live streams into one “complete dump.” [LiME capture documentation](https://github.com/jtsylve/LiME/blob/master/docs/README.md)
 
-## 格式、验证与禁用的捷径
+## Formats, validation and shortcuts to avoid
 
-| 输入 | 正确解释 |
+| Input | Correct interpretation |
 |---|---|
-| 本案 pc.ram | 按已验证的 QEMU low/high RAM 布局换算 GPA |
-| LiME | 逐段 header 的物理起止地址；检查范围、长度、缺失/超时，不能去头后直接拼接 |
-| padded / physical raw | 以工具的地址规则和来源映射为准；扩展名 raw 不能决定布局 |
-| GDB ELF core | 用 PT_LOAD 的进程 VA；有寄存器等 note，仍不是整机 RAM |
-| 本仓库 process mappings | 用 capture.json 的 VA 与 holes；不包含寄存器 |
+| This incident's pc.ram | Convert GPA according to the verified QEMU low/high RAM layout |
+| LiME | Physical start/end addresses in each segment header; check ranges, lengths and missing/timeouts; do not strip headers and concatenate |
+| padded / physical raw | Use the tool's address rules and provenance mapping; a raw extension does not determine layout |
+| GDB ELF core | Use process VAs in PT_LOAD; includes notes such as registers but is still not whole-system RAM |
+| This repository's process mappings | Use capture.json VAs and holes; registers are absent |
 
-`recover_ram_keys.py` 的 pc.ram profile **不能直接读 LiME、ELF 或物理内存 raw**。整机分析应采用支持其格式的工具，保留 kernel banner、原厂 vmlinux/debug 信息和必要符号；Volatility 的 Linux 符号要求精确匹配，不能用同版本号的通用符号蒙混通过。格式/符号缺失会限制自动分析，但不应延误已经可做的采集。[Volatility 符号说明](https://volatility3.readthedocs.io/en/latest/symbol-tables.html)
+The pc.ram profile in `recover_ram_keys.py` **cannot directly read LiME, ELF or physical-memory raw**. Whole-system analysis needs a tool that supports the format, with kernel banner, vendor vmlinux/debug information and necessary symbols retained. Volatility Linux symbols must match exactly; generic symbols for the same version number are not sufficient. Missing formats/symbols limit automated analysis but should not delay capture that is already possible. [Volatility symbols](https://volatility3.readthedocs.io/en/latest/symbol-tables.html)
 
-完整验收记录工具/系统版本、时间区间、源范围、目标字节、错误/空洞、源与目的摘要。全文 SHA 相同只说明复制一致，不证明采集没有漏 RAM 或密钥一定在内。物理 RAM 也不等于已换出的全部用户页；swap/休眠证据另行保全，不能通过关闭 swap 来“补齐”。
+Full acceptance records tool/system versions, time interval, source ranges, destination bytes, errors/holes and source/destination digests. Matching full-file SHA proves copy consistency only, not complete RAM capture or key presence. Physical RAM is not all swapped-out user pages; preserve swap/hibernation evidence separately and do not disable swap to “fill the gap.”
 
-不要直接 dd 一个大尺寸的 /proc/kcore 当裸 RAM；它是 ELF 接口，需由理解布局的工具读取。GDB/gcore 会涉及调试附加与 detach，可能影响暂停状态；默认过滤也会漏映射，不能用 gcore 成功替代覆盖核验。只有先在无害进程上验证保留 T 状态和过滤行为后才考虑备选，采集后绝不自动 CONT。[kcore](https://man7.org/linux/man-pages/man5/proc_kcore.5.html)、[GDB core](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Core-File-Generation.html)
+Do not directly dd a large /proc/kcore as raw RAM: it is an ELF interface and needs a tool that understands the layout. GDB/gcore attach and detach may affect the stopped state, and default filtering can omit mappings; successful gcore is not a substitute for coverage checks. Consider it only after verifying T-state preservation and filtering on a harmless process, and never automatically send CONT after capture. [kcore](https://man7.org/linux/man-pages/man5/proc_kcore.5.html), [GDB core](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Core-File-Generation.html)
 
-kdump 依赖预留 crash kernel 并在 crash 路径采集；过滤选项还可能排除用户页。不要在当前唯一现场临时触发 panic、重启配置 kdump 或把故障恢复步骤当成非破坏性采集。已配置、已验证的 crash 取证属于另一个明确决策；本指南没有提供触发命令。[Linux kdump](https://docs.kernel.org/admin-guide/kdump/kdump.html)
+kdump requires a reserved crash kernel and captures on the crash path; filtering may also exclude user pages. Do not trigger panic on the only current scene, reboot to configure kdump or treat fault recovery as nondestructive capture. Already configured and validated crash forensics is a separate explicit decision; this guide supplies no trigger command. [Linux kdump](https://docs.kernel.org/admin-guide/kdump/kdump.html)
 
-Windows 物理机可另行评估官方 WinPmem 的匹配签名驱动；本仓库 Linux 采集器不适用，也不应为加载驱动改 test-signing 后重启。macOS/Apple Silicon 不提供通用整机 dump 承诺，应转向实际受支持的专项取证路径；不要临时关闭 SIP 或重启试工具。[WinPmem](https://github.com/Velocidex/WinPmem)
+For physical Windows machines, separately assess a matching signed official WinPmem driver; this repository's Linux collector does not apply, and do not change test-signing and reboot to load a driver. macOS/Apple Silicon has no universal whole-system dump promise; use an actually supported specialist forensic path instead. Do not temporarily disable SIP or reboot to try a tool. [WinPmem](https://github.com/Velocidex/WinPmem)
