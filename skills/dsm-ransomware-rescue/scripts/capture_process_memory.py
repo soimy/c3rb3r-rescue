@@ -13,6 +13,10 @@ import re
 import shutil
 import time
 
+# Compatibility report: https://github.com/soimy/c3rb3r-rescue/issues/14
+# Linux pread uses signed 64-bit off_t. x86 [vsyscall] can lie above it.
+PREAD_OFFSET_LIMIT = 1 << 63
+
 
 def parse_stat(text):
     fields = text.rsplit(')', 1)[1].split()
@@ -56,6 +60,14 @@ def parse_maps(text):
         regions.append({'start': start, 'end': end, 'permissions': fields[1],
                         'path': fields[5] if len(fields) == 6 else ''})
     return regions
+
+
+def select_mappings(regions):
+    readable = [r for r in regions if r['permissions'].startswith('r')]
+    selected = [r for r in readable if r['end'] <= PREAD_OFFSET_LIMIT]
+    excluded = [dict(r, reason='offset_exceeds_signed_off_t') for r in readable
+                if r['end'] > PREAD_OFFSET_LIMIT]
+    return sorted(selected, key=priority), excluded
 
 
 def hash_file(path):
@@ -123,9 +135,9 @@ def capture(proc, output, expected_ticks, expected_exe_sha256, expected_output_d
     before = identity(proc); require_stopped(before, expected_ticks)
     maps = (proc/'maps').read_bytes()
     regions = parse_maps(maps.decode())
-    selected = sorted((r for r in regions if r['permissions'].startswith('r')), key=priority)
+    selected, excluded = select_mappings(regions)
     if not selected:
-        raise ValueError('No readable mappings')
+        raise ValueError('No readable mappings addressable by pread')
     exe_sha = hash_file(proc/'exe')
     if exe_sha != expected_exe_sha256.lower():
         raise ValueError('Executable hash differs from reviewed process')
@@ -175,9 +187,12 @@ def capture(proc, output, expected_ticks, expected_exe_sha256, expected_output_d
         result = {'schema': 1, 'format': 'linux-process-mappings', 'pid': int(proc.name),
                   'start_ticks': expected_ticks, 'exe_sha256': exe_sha,
                   'started_unix': started, 'ended_unix': time.time(),
-                  'complete': all(r['complete'] for r in captured), 'regions': captured,
+                  'complete': not excluded and all(r['complete'] for r in captured),
+                  'selected_mappings_complete': all(r['complete'] for r in captured),
+                  'regions': captured, 'excluded_unaddressable': excluded,
+                  'pread_offset_limit_exclusive': PREAD_OFFSET_LIMIT,
                   'excluded_nonreadable': [r for r in regions if not r['permissions'].startswith('r')],
-                  'scope': 'Readable user mappings only; no registers, kernel RAM or unmapped pages',
+                  'scope': 'Readable user mappings below signed off_t limit; no registers, kernel RAM or unmapped pages',
                   'consistency': 'Stopped threads checked at boundaries; shared pages can change; reads may fault in swapped pages'}
         save(output/'capture.json', json.dumps(result, indent=2).encode())
         (output/'regions.jsonl').chmod(0o400)
@@ -207,13 +222,17 @@ def main():
     proc = Path('/proc')/str(args.pid)
     if args.action == 'inspect':
         info = identity(proc)
+        selected, excluded = select_mappings(parse_maps((proc/'maps').read_text()))
         info.update(pid=args.pid, exe_sha256=hash_file(proc/'exe'),
-                    readable_bytes=sum(r['end']-r['start'] for r in parse_maps((proc/'maps').read_text())
-                                       if r['permissions'].startswith('r')))
+                    readable_bytes=sum(r['end']-r['start'] for r in selected),
+                    readable_bytes_scope='Selected pread-addressable mappings',
+                    excluded_unaddressable=excluded)
         print(json.dumps(info, indent=2)); return 0
     result = capture(proc, args.output, args.expected_start_ticks, args.expected_exe_sha256,
                      args.expected_output_device)
     print(json.dumps({'complete': result['complete'], 'regions': len(result['regions']),
+                      'selected_mappings_complete': result['selected_mappings_complete'],
+                      'excluded_unaddressable': len(result['excluded_unaddressable']),
                       'receipt': str(args.output/'capture.json')}))
     return 0 if result['complete'] else 2
 

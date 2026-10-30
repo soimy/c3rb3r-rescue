@@ -2,7 +2,9 @@
 
 English | [简体中文](physical-memory_CN.md)
 
-Sources checked on 2026-10-29. This guide distinguishes upstream support, synthetic tests, isolated Linux subprocess tests and acceptance on a real physical device. **This incident's demonstrated result remains PVE RAM; AVML and LiME module loading have not been validated on physical DSM.**
+Sources checked on 2026-10-29; community update on 2026-10-30. This guide distinguishes upstream support, synthetic tests, isolated Linux subprocess tests and acceptance on a real physical device. **This incident's demonstrated result remains PVE RAM; AVML and LiME module loading have not been validated on physical DSM.**
+
+Community reports now include successful physical DSM process-memory recovery, including DS920+ / DSM 7.2.2 in [Issue #14](https://github.com/soimy/c3rb3r-rescue/issues/14). These are reporter results, not a new real-device test by this maintainer. Preserve the distinction between process capture, AVML command completion and verified whole-system coverage. See [community evidence](https://github.com/soimy/c3rb3r-rescue/blob/main/docs/community-findings.md).
 
 ## First choose a path that can preserve evidence immediately
 
@@ -43,7 +45,9 @@ sudo python3 /opt/ir/capture_process_memory.py capture \
 
 The collector reads mem only: it does not attach a debugger, send STOP/CONT/KILL, change permissions or load modules. At the start and boundaries it checks PID start ticks, exe SHA, all threads T/no tracer, maps and destination device. It collects private anonymous writable regions first, then other writable regions, then remaining readable regions. It cannot guarantee there was no momentary resume between boundary checks; other processes may also modify shared pages, and reading mem may page swapped-out data back in.
 
-The new directory must not exist. Each file records start/end VA, SHA, read-back verification and unreadable pages. Holes are zero-filled placeholders, **not captured zero-valued memory**. Exit 2 indicates missing pages, but completed regions may still be useful. An interrupted directory without capture.json can only be interpreted as partial capture using regions.jsonl / failure.json. The tool does not automatically delete this material or overwrite on retry.
+The new directory must not exist. Each file records start/end VA, SHA, read-back verification and unreadable pages. Holes are zero-filled placeholders, **not captured zero-valued memory**. Exit 2 indicates missing pages or excluded unaddressable mappings, but completed regions may still be useful. An interrupted directory without capture.json can only be interpreted as partial capture using regions.jsonl / failure.json. The tool does not automatically delete this material or overwrite on retry.
+
+[Issue #14](https://github.com/soimy/c3rb3r-rescue/issues/14) exposed this compatibility failure: on x86-64, `[vsyscall]` may sit above the signed 64-bit offset accepted by `pread`. The collector excludes entire mappings crossing that limit before space estimation and records `excluded_unaddressable`; `inspect` reports those ranges too. It does not convert high addresses to negative offsets or silently discard them. `selected_mappings_complete` describes only selected mappings; `complete` stays false if any readable mapping was excluded or any selected page was unreadable. An expected exclusion still requires reviewing the receipt, not calling the collection complete RAM.
 
 Process output is not an ELF core. After transferring to a clean analysis host and checking digests, the same reviewed sample can be analyzed with:
 
@@ -69,6 +73,8 @@ sha256sum /mnt/ir-evidence/CASE/ram-new.lime
 ```
 
 This template uses that release's uncompressed LiME output. Retain stderr, provenance and exit status, and verify by read-back on the analysis host. A command's existence or exit 0 is not proof that all RAM was covered. Preserve compressed output as original and convert an independent copy offline. Do not use automatic deletion/upload options on the only on-site copy. [Pinned version documentation](https://github.com/microsoft/avml/blob/v0.21.0/README.md)
+
+After transfer, use the offline `inspect_lime.py` checks in [tool usage](https://github.com/soimy/c3rb3r-rescue/blob/main/docs/tool-usage.md). LiME v1 uses **32-byte headers**, with inclusive end addresses (`end - start + 1`), not a 24-byte concatenated layout. Preserve file-offset-to-physical-range mappings; address gaps can be hardware holes. Compare with usable System RAM addresses saved in `/proc/iomem`, and retain tool timeout/errors even when the structure passes. [LiME header definition](https://github.com/504ensicsLabs/LiME/blob/master/src/lime.h)
 
 ## C. LiME and DSM vendor kernels
 
@@ -105,3 +111,11 @@ Do not directly dd a large /proc/kcore as raw RAM: it is an ELF interface and ne
 kdump requires a reserved crash kernel and captures on the crash path; filtering may also exclude user pages. Do not trigger panic on the only current scene, reboot to configure kdump or treat fault recovery as nondestructive capture. Already configured and validated crash forensics is a separate explicit decision; this guide supplies no trigger command. [Linux kdump](https://docs.kernel.org/admin-guide/kdump/kdump.html)
 
 For physical Windows machines, separately assess a matching signed official WinPmem driver; this repository's Linux collector does not apply, and do not change test-signing and reboot to load a driver. macOS/Apple Silicon has no universal whole-system dump promise; use an actually supported specialist forensic path instead. Do not temporarily disable SIP or reboot to try a tool. [WinPmem](https://github.com/Velocidex/WinPmem)
+
+## If the process is already gone
+
+This guidance draws on [#6: OOM and snapshots](https://github.com/soimy/c3rb3r-rescue/issues/6), [#9: negative RAM/zram search](https://github.com/soimy/c3rb3r-rescue/issues/9), and [#10: evidence limits](https://github.com/soimy/c3rb3r-rescue/issues/10). The operational recommendations below are our synthesis.
+
+An OOM kill, normal exit and attacker cleanup have different evidence trails; do not infer one from uptime or a deleted executable alone. There is no validated “safe for N hours” threshold. A negative RAM search covers only that acquisition and search method. Preserve `/proc/swaps` and actual usage: an unused disk swap does not substitute for active zram, and raw compressed zram is not a linear image of decompressed swap pages. Collection must preserve the chosen format and cannot use swapoff as a shortcut.
+
+After volatile acquisition, inspect surviving snapshots and independent originals. On Btrfs, assess [old-extent recovery](btrfs-recovery.md) before declaring all files unrecoverable. Keep these steps from allocating new files in the affected storage pool.

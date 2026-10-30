@@ -1,9 +1,22 @@
 {
   "date": "2026-10-29",
-  "runtime": {"python": "3.12.14", "numpy": "2.3.5", "cryptography": "50.0.2"},
-  "unit_tests": {"run": 21, "failures": 0, "errors": 0, "skipped": 1, "platform": "macOS"},
+  "runtime": {
+    "python": "3.12.14",
+    "numpy": "2.3.5",
+    "cryptography": "50.0.2"
+  },
+  "unit_tests": {
+    "run": 21,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "platform": "macOS"
+  },
   "linux_process_suite": {
-    "run": 5, "failures": 0, "errors": 0, "skipped": 0,
+    "run": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
     "environment": "Isolated ARM64 container in local OrbStack; no network, read-only root, no extra capabilities",
     "image": "python@sha256:673719e071ecf27434fd2635bbd8d00f49f4fdd81f243143438a42ced8bedf60",
     "live_test": "Capture only a test-created stopped child, read back a known marker by VA, verify state remains T",
@@ -32,5 +45,51 @@
     "Authenticated GitLab UI, clone, LFS checkout, CI and production capacity tests"
   ],
   "private_receipts": "Kept locally; excluded from Git history",
-  "scope": "Synthetic tests and specified real offline replays; not a universal decryptor certification"
+  "scope": "Synthetic tests and specified real offline replays; not a universal decryptor certification",
+  "community_update_2026_10_30": {
+    "unit_tests": {
+      "run": 35,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "platform": "macOS",
+      "python": "3.12.14"
+    },
+    "linux_process_tests": {
+      "run": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "linux_inspection_tests": {
+      "run": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "linux_environment": "Local OrbStack ARM64; network disabled, read-only root, no capabilities; only source and tests mounted",
+    "linux_image": "python@sha256:673719e071ecf27434fd2635bbd8d00f49f4fdd81f243143438a42ced8bedf60",
+    "new_coverage": [
+      "Signed off_t exclusion of x86 vsyscall with explicit partial receipt",
+      "Explicit alternate footer markers with unchanged wrong-key and full-file validation",
+      "Metadata-only footer inspection rejecting unsupported or incomplete layouts",
+      "LiME 32-byte headers, inclusive bounds, byte order, truncation, overlap and saved iomem comparison",
+      "LiME CLI distinguishes structural failure, range disagreement and unchecked coverage"
+    ],
+    "archive_self_test": "passed",
+    "skill_structure_validation": "passed",
+    "bilingual_pairs_checked": 10,
+    "python38_syntax": "Collector and stdlib inspectors parsed with Python 3.8 grammar; not a DSM runtime test",
+    "external_source_revisions": {
+      "Benjamin-zlt/c3rb3r-baremetal-rescue": "906e81293153341f162ee1f176722d93ba1d8358",
+      "crt106/c3rb3r-btrfs-recovery": "b831f3a0f718677b889f2998ff09a0b925baa56b"
+    },
+    "not_performed": [
+      "New physical DSM memory acquisition",
+      "Real Btrfs block-device recovery",
+      "Execution of either external repository's acquisition/decryption tools",
+      "New cross-victim key validation"
+    ],
+    "private_receipts": "New local-validation directory; original private evidence seal unchanged"
+  }
 }

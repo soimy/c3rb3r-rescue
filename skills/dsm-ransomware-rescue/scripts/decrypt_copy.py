@@ -20,17 +20,10 @@ import sys
 import numpy as np
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-FOOTER_SIZE = 588
+from file_layout import (FOOTER_SIZE, FIRST_LIMIT, MARKER, PARTIAL_FACTORS,
+                         RecoveryError, encrypted_segments, parse_marker, read_footer)
+
 CALL_LIMIT = 5 * 1024 * 1024
-FIRST_LIMIT = 1024 * 1024
-# The four-byte identifier observed in this incident, not a universal signature.
-MARKER = bytes.fromhex("ce35a593")
-PARTIAL_FACTORS = {10: 4, 15: 5, 20: 7, 25: 9, 30: 10, 35: 12,
-                   40: 14, 50: 10, 60: 20, 70: 23, 80: 27}
-
-
-class RecoveryError(ValueError):
-    pass
 
 
 def chacha8_call(data, key, nonce, counter=0):
@@ -83,43 +76,6 @@ def chacha8_call(data, key, nonce, counter=0):
     return plain.tobytes(), counter + count
 
 
-def encrypted_segments(size, mode, percent):
-    if mode == 0x24:
-        if percent:
-            raise RecoveryError("Unexpected parameter for full mode")
-        return [(0, size)]
-    if mode == 0x26:
-        if percent:
-            raise RecoveryError("Unexpected parameter for first-1-MiB mode")
-        return [(0, min(size, FIRST_LIMIT))]
-    if mode != 0x25 or percent not in PARTIAL_FACTORS:
-        raise RecoveryError("Unsupported encryption mode or partial parameter")
-    length = (size // 100) * PARTIAL_FACTORS[percent]
-    count = 5 if percent == 50 else 3
-    gap = length if percent == 50 else (size - 3 * length) // 2
-    return [(index * (length + gap), length) for index in range(count)]
-
-
-def read_footer(source, size):
-    if size < FOOTER_SIZE:
-        raise RecoveryError("Input is too short for a complete footer")
-    source.seek(-FOOTER_SIZE, os.SEEK_END)
-    footer = source.read(FOOTER_SIZE)
-    if footer[568:572] != MARKER:
-        raise RecoveryError("Expected incident footer is not at EOF; appended data is unsupported")
-    mode, percent, crypto_mode, reserved = footer[572:576]
-    original_size = struct.unpack_from("<Q", footer, 580)[0]
-    if original_size != size - FOOTER_SIZE:
-        raise RecoveryError("Stored size does not match EOF footer; appended/truncated data is unsupported")
-    if crypto_mode != 0x20 or reserved != 0:
-        raise RecoveryError("Only crypto mode 0x20 is supported; refuse decoy/unknown records")
-    segments = encrypted_segments(original_size, mode, percent)
-    if any(offset < 0 or length < 0 or offset + length > original_size
-           for offset, length in segments):
-        raise RecoveryError("Invalid encrypted byte ranges")
-    return footer, original_size, mode, percent, segments
-
-
 def unwrap_record(footer, master):
     if len(master) != 48:
         raise RecoveryError("Master material must be exactly 48 bytes (IV16 + key32)")
@@ -139,7 +95,10 @@ def readonly_regular(path, *, independent=False):
     return os.fdopen(fd, "rb"), info
 
 
-def decrypt_copy(input_copy, output, master_file, copy_root, expected_sha256=None):
+def decrypt_copy(input_copy, output, master_file, copy_root, expected_sha256=None,
+                 expected_marker=MARKER):
+    if not isinstance(expected_marker, bytes) or len(expected_marker) != 4:
+        raise RecoveryError("Decryption requires an explicit four-byte expected marker")
     root = Path(copy_root).resolve(strict=True)
     if not root.is_dir():
         raise RecoveryError("Copy root must be a directory")
@@ -165,7 +124,7 @@ def decrypt_copy(input_copy, output, master_file, copy_root, expected_sha256=Non
     created = None
     try:
         with source:
-            footer, original_size, mode, percent, segments = read_footer(source, before.st_size)
+            footer, original_size, mode, percent, segments = read_footer(source, before.st_size, expected_marker)
             key, nonce = unwrap_record(footer, master)
             flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
             fd = os.open(output, flags, 0o600)
@@ -205,6 +164,7 @@ def decrypt_copy(input_copy, output, master_file, copy_root, expected_sha256=Non
         return {"output": str(output.resolve()), "bytes": original_size,
                 "sha256": recovered_hash, "mode": hex(mode), "percent_parameter": percent,
                 "cipher_blocks_consumed": counter,
+                "expected_marker": expected_marker.hex(), "observed_marker": footer[568:572].hex(),
                 "verification": "known-original-sha256" if expected_sha256 else
                 "key-record-only; independently validate full file contents"}
     except BaseException:
@@ -225,10 +185,12 @@ def main():
     parser.add_argument("--master-file", required=True, help="Private 48-byte IV16 + AES-key32 file")
     parser.add_argument("--output", required=True, help="New output path; must not already exist")
     parser.add_argument("--expected-sha256", help="Optional known-original hash; mismatch removes new output")
+    parser.add_argument("--expected-marker", type=parse_marker, default=MARKER,
+                        help="Reviewed four-byte session marker as 8 hex digits (default: ce35a593)")
     args = parser.parse_args()
     try:
         result = decrypt_copy(args.input_copy, args.output, args.master_file,
-                              args.copy_root, args.expected_sha256)
+                              args.copy_root, args.expected_sha256, args.expected_marker)
     except (OSError, RecoveryError) as error:
         print(f"Recovery refused/failed: {error}", file=sys.stderr)
         return 1

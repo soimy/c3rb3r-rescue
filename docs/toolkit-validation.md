@@ -4,6 +4,14 @@ English | [简体中文](toolkit-validation_CN.md)
 
 Compiled 2026-10-29. Business recovery results come from on-site receipts; the parameterized scripts were independently replayed. Synthetic tests do not read real keys or execute malware.
 
+## Community-driven update (2026-10-30)
+
+This update was prompted by the [source-linked community reports](community-findings.md). The full macOS suite ran **35 tests: 34 passed, 1 Linux-only test skipped** using Python 3.12.14, NumPy 2.3.5 and cryptography 50.0.2. The process suite passed **7/7 on isolated Linux**, including real reads from a test-created stopped child; the standard-library inspection suite passed **8/8** there. These Linux subsets overlap the full suite and are not extra distinct tests.
+
+New regression coverage includes x86 `[vsyscall]` and signed-offset boundaries, explicit exclusion/partial receipts, alternate session markers with wrong-key rejection, read-only footer inspection, LiME 32-byte headers/inclusive ends, both byte orders, truncation/overlap, redacted RAM maps, missing/outside ranges and CLI exit distinctions. Existing cipher vectors, copy/no-overwrite protection and full-file SHA checks still pass. Collector and inspector syntax was also checked against Python 3.8 grammar; this is not execution on DSM's Python 3.8.
+
+The archive self-test and official skill structure validator passed. Ten English/Chinese pairs were checked for reciprocal switches, local targets, command parity and SHA-256 parity. New receipts are in ignored `local-validation/`; the old evidence seal was not modified. No new physical DSM acquisition, Btrfs block recovery, external-script execution or cross-victim key validation was performed. See [validation-summary.json](validation-summary.json) for the new dated section; earlier records below remain historical.
+
 ## Test coverage
 
 - ChaCha8: two public vectors; 64-bit counter carry, call lengths, discarded short-block remainder and whole-file/first-segment/segmented boundaries.

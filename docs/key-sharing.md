@@ -18,7 +18,7 @@ This supports generation of new session material at initialization; no direct us
 
 The review also confirmed that failure of the random-generation wrapper causes initialization to fail and the main flow to take the exit branch at 0x43e4df–0x43e4ed. No fixed public fallback master key was found on this path. This further supports different session material for each normal start, but does not exhaust all random implementations or environmental failures.
 
-The original disassembly and sample remain sealed locally. Even for a sample with the same SHA, check the operating mode and session footer marker; the repository decryptor does not automatically adapt across sessions.
+The original disassembly and sample remain sealed locally. Even for a sample with the same SHA, check the operating mode and session footer marker; the repository decryptor requires an explicitly reviewed session marker and does not automatically adapt across layouts.
 
 ## Authorized public candidate
 
@@ -51,10 +51,14 @@ The exporter checks the record format, material length and digest, creates the o
   --expected-sha256 KNOWN_ORIGINAL_SHA256
 ```
 
-Replace the example paths and digest with your own values and prepare the output directory first. The material targets this incident's analyzed `0x20` mode and `ce35a593` footer marker. The decryptor rejects a mismatched marker, size or mode; analyze the format again rather than removing checks. Repeated encryption, incomplete encryption and content appended after the footer require separate handling.
+Replace the example paths and digest with your own values and prepare the output directory first. The material targets this incident's analyzed `0x20` mode and `ce35a593` footer marker. The decryptor rejects a mismatched marker, size or mode. After separately checking the layout, `--expected-marker HEX8` can select another reviewed session for a local candidate test; it does not make this public key applicable to that session. Use the metadata-only inspector described in [tool usage](tool-usage.md), and retain all checks. Repeated encryption, incomplete encryption and content appended after the footer require separate handling.
 
 Without a historical SHA, omit the last argument, but call the output a candidate only. Continue with full archive CRC/PACK/LFS checks, known plaintext or application validation. A passing nonce-repeat check, correct header or image that opens does not validate the whole file. Preserve originals and errors on failure; this candidate is not a reason to forgo capturing your own memory.
 
 For collaborative validation, prefer running locally on the other party's machine and sharing only results or authorized non-sensitive samples. Do not request complete RAM, GitLab secrets or private files.
 
 Professional channels may also coordinate verified recovery material; for example, No More Ransom lists decryption tools and key resources with their applicable scope. Obtain separate data-owner authorization before contacting a service or submitting samples; this repository sends nothing automatically. [No More Ransom](https://www.nomoreransom.org/)
+
+## Community update, 2026-10-30
+
+Public reports include successful recovery using each physical machine's own memory-derived material and failures of this public candidate on other victims' files. These replicate the method, not cross-victim key reuse. Marker equality alone is not proof of key equality. See the [source-linked evidence table](community-findings.md); no new real key is published by this update.

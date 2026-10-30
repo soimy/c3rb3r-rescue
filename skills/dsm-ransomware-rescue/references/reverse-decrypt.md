@@ -47,3 +47,7 @@ REA/Ghidra 静态流程：打开派生文件 → 查字符串和调用引用 →
 脚本当前只处理 EOF 完整、尺寸一致、已验证标记与 0x20 模式，失败时不覆盖输入；新增输出校验失败会移除。原始密钥仍在只读封存区，完整仓库另按所有者授权发布一份 `profiles/recovery-key-20261028.json` 会话恢复候选。它不是通用密钥，未验证跨受害者适用；合成测试不读取它。公开材料的使用及限制见[仓库密钥说明](https://github.com/soimy/c3rb3r-rescue/blob/main/docs/key-sharing.md)。
 
 公开向量来源：[Botan ChaCha vectors](https://github.com/randombit/botan/blob/master/src/tests/data/stream/chacha.vec)。逆向算法与布局的证据来自本地样本、反编译和真实明密文对照。
+
+## 其他会话的标记
+
+`inspect_footer.py --input-copy COPY` 使用标准库读取尾部元数据和预期加密范围，不输出文件密钥记录。先确认样本及布局，再向 `decrypt_copy.py` 传 `--expected-marker` 和严格的 8 位十六进制标记；默认仍是本案 `ce35a593`。此参数只绑定期望会话，不改变 0x20、尺寸、nonce 和完整摘要校验。标记相同也不能证明密钥相同；错误 IV 仍可能通过 nonce 筛选，因此不能只凭一次结构成功批量宣布恢复。

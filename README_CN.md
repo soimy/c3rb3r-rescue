@@ -1,86 +1,73 @@
-# c3rb3r-rescue
+# C3RB3R / .L0CK3D 勒索救灾
 
 [English](README.md) | 简体中文
 
-一次 DSM / GitLab 勒索事件的取证、内存密钥恢复和副本解密记录。目标是让下一次处置能够复现经过验证的步骤，同时保留失败和证据缺口。
+**NAS 文件突然变成 `.L0CK3D`，目录里出现 `read-me3.txt`？先保住现场，仍可能有恢复机会。**
 
-本工具适用于已分析的 `libgld` 样本与文件格式，**不是 C3RB3R 家族的通用解密器**。样本 SHA-256：`802ac85d19dc6db2b1849bb3499877280544d04a0ae94d4c408b6c321669903d`。不包含恶意二进制、业务数据或可运行的入侵载荷。
+这个仓库帮助你或你的 AI 助手停止损失、保存内存、寻找密钥，再在副本上恢复文件。已有[本案 PVE](docs/incident-report_CN.md)和[社区物理 DSM](https://github.com/soimy/c3rb3r-rescue/issues/14)的成功案例；密钥找不到时，部分 Btrfs 文件还可以尝试从旧数据块恢复。**能恢复多少取决于现场，没有一把适用于所有人的万能密钥。**
 
-**现按所有者授权公开一份真实的 [48 字节会话恢复候选](profiles/recovery-key-20261028.json)**，供其他受害者在副本上验证。它来自 RAM，不是攻击者的 RSA 私钥；只验证过本事件的文件，**没有跨受害者成功证据**。相同攻击者、样本或后缀不代表密钥相同。适用范围、导出命令和匹配方法见[密钥说明](docs/key-sharing_CN.md)。
+> **先别重启、关机、升级、重装，也别 `kill -9` 加密进程。** 进程内存中可能还留着解密所需的密钥。不要删除密文、快照或回收站来腾空间，也不要把恢复文件写回受灾存储池。
 
-**首要目标是保住仍在内存中的解密材料。** 在阻止继续加密并保留管理通道后，尽早采集可取得的进程内存和整机 RAM；不要等全盘盘点、漏洞归因或完整反编译做完才 dump。不要为清理恶意程序先 kill、重启、升级系统或启动另一张救援盘。内存采集不能保证一定有可用密钥，但失去这份易失证据后，本案的恢复路径可能不再成立。
+## 第一时间做什么
 
-本案成功来自 **PVE 来宾 RAM**。新增的[物理机 Linux / DSM 采集指南](skills/dsm-ransomware-rescue/references/physical-memory_CN.md)覆盖进程映射、AVML 和 LiME；物理 DSM 整机采集尚未实机验收，不能把本次 VM 成功外推到所有设备。
+1. **阻止继续加密，保住进程。** 先核实可疑进程身份，再用 `sudo kill -STOP PID` 暂停它，`PID` 换成确认过的进程号。检查所有线程是否为 `T`；`D` 仍是等待 I/O，不能算暂停成功。程序名可以变化，别仅凭名字批量暂停或杀进程。
+2. **隔离入口和同步。** 阻断 NAS 对互联网及其他设备的访问，检查 IPv4 和 IPv6；暂停云同步、共享同步，避免损坏传播。远程处置先保留可信控制台或受限 SSH，别把自己锁在外面。
+3. **尽快保存内存和程序样本。** 不要等全盘扫描或查明漏洞才采集。目标选容量足够的独立存储；先核对挂载和空间，别把大 dump 写进 `/tmp` 或受灾数据卷。按下面的表选择采集方式。
+4. **复制少量密文，先验证恢复。** 尽量找几份电脑、手机、邮件或 Git 克隆中仍完好的同版本原件，用完整 SHA-256 或逐字节比较验证。验证后再扩大范围；原始密文一直保留。
+5. **把业务恢复到干净环境。** 数据恢复成功不代表原 NAS 已经安全。业务可用后，再处理重建、凭据更换和入侵入口。
 
-## 交给 AI 使用
+不熟悉 SSH 或进程操作，可以直接把本页交给 AI 或管理员，使用下方的任务说明。不要为了运行工具重启受灾机。
 
-可把仓库 URL 和下面这段任务说明交给助手；先提供系统/架构、是否仍开机、可用管理通道和现有授权范围，**不要发送密码、真实密钥、完整内存或业务文件**：
+## 你的情况走哪条路
 
-> 阅读 README 与 skills/dsm-ransomware-rescue/SKILL.md。以保住易失密钥为优先，确认当前机器是虚拟机还是物理机，区分进程内存和整机 RAM。先调查可用权限、暂停状态、目标存储和采集兼容性，再在现有授权内采取适用的步骤。保留原始文件、独立副本和校验收据；不要执行样本、自动加载不匹配的内核模块或重启受灾机。只对副本尝试解密，分别报告已验证结果、猜测和未覆盖范围。
+| 当前情况 | 下一步 |
+|---|---|
+| **PVE 中的 DSM，机器还在运行** | 从可信宿主保存来宾内存，再离线找密钥。见[保全与 PVE 内存](skills/dsm-ransomware-rescue/references/containment-memory.md)。 |
+| **物理 DSM，加密进程还在** | 暂停并核对全部线程后，优先保存进程内存，再评估整机 RAM 采集。见[物理机采集步骤](skills/dsm-ransomware-rescue/references/physical-memory_CN.md)。 |
+| **进程已消失，机器未重启** | 尽早保存可采集的 RAM 和实际使用的 swap，但不要假定密钥一定残留。同时检查快照、其他副本和下方 Btrfs 路线。 |
+| **找不到密钥，数据卷是 Btrfs** | 保存现有快照，评估是否还有引用旧数据块的文件区段。见[Btrfs 无密钥恢复](skills/dsm-ransomware-rescue/references/btrfs-recovery_CN.md)。 |
+| **已经关机或重启** | 不能靠重新启动找回之前的进程内存。保留磁盘、已有 dump、快照和其他副本；Btrfs 路线是否可行仍需检查。 |
 
-症状相同不证明样本、会话或密钥相同。当前解密器还检查本案会话尾标记；其他事件须重新验证布局及标记，不能通过删除校验强行运行。参见[密钥复用与分享](docs/key-sharing_CN.md)。
+**“一直没重启”不等于“密钥还在”；“进程退出”也不等于“所有数据都没救”。** 社区既有成功恢复，也有完整搜索未找到密钥的报告，见[案例与验证范围](docs/community-findings_CN.md)。
 
-本次结果：16 GiB 内存副本中找到可用的 48 字节主材料；五组已知明密文逐字节一致。10/24 的约 49 GiB 周备份与历史摘要一致，随后在隔离的同版本 GitLab 中恢复出 80 个项目、23 个用户、16 个群组和 9253 个 LFS 对象。仓库、secrets、LFS、附件和 artifacts 检查通过，登录页返回 200。10/22 的另一份周备份存在交错重复加密，仍未完整恢复。新发现的内存日志高可信指向 DSM 登录插件环境注入、与 CVE-2024-10441 一致，尚缺少完整请求和执行链。
+## 为什么可能恢复
 
-## 阅读入口
+本次分析的程序给每个文件生成加密材料，再用一份**会话密钥**保护它，把保护后的记录写在文件末尾。会话密钥可能仍在加密进程的内存里。拿到匹配的会话密钥，就有机会逐个解开文件，无需取得攻击者的私钥。
 
-- [事件过程与证据边界](docs/incident-report_CN.md)
-- [攻击路径：日志、RAM 结构与漏洞判断](docs/attack-path_CN.md) · [可复核证据索引](docs/attack-path-evidence.json)
-- [封存布局、保管和重验](docs/evidence-seal_CN.md)
-- [工具验证记录](docs/toolkit-validation_CN.md)
-- [物理机采集与失败分流](skills/dsm-ransomware-rescue/references/physical-memory_CN.md)
-- [密钥层级、复用与公开边界](docs/key-sharing_CN.md)
-- [可复用 skill](skills/dsm-ransomware-rescue/SKILL.md)：保全、RAM、REA 逆向、盘点、解密、GitLab 验收。
-
-## 本地与 GitHub 的边界
-
-GitHub 仓库公开，保存脱敏记录、skill、源码、合成测试、样本布局参数，以及上述单独授权的恢复候选。每次发布仍检查 Git 暂存区；该授权不涵盖其他密钥、账号凭据、完整 RAM 或业务数据。
-
-`private/` 被 Git 忽略，保存本机证据副本、内存 dump、其余密钥候选、原始日志、对话快照和保管清单。**Git clone 包含单独发布的候选，但不包含这些私有证据，也不能重建其他会话的密钥。** 大体积业务密文和恢复备份仍在救援 NAS，位置和既有校验收据由本地索引记录，不复制到 Git 历史。
-
-这是逻辑封存：独立副本、逐文件摘要、落盘重读、只读权限和来源记录。没有做全盘取证镜像，没有将运行中的 DSM 变为不可变磁盘快照，也没有将联网 NAS 称为离线备份。
-
-## 使用
-
-工具目录：`skills/dsm-ransomware-rescue/scripts/`。分析环境 Python 3.11+；实际回归环境为 Python 3.12，NumPy / cryptography 版本见 `requirements.txt`。DSM 元数据盘点和新增进程采集器只需标准库 Python 3.8+；不要为了运行解密器升级受灾系统。
-
-在干净的分析机建立环境：
-
-```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-PYTHONPATH=skills/dsm-ransomware-rescue/scripts:scripts .venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python skills/dsm-ransomware-rescue/scripts/verify_backup.py --self-test
+```mermaid
+flowchart LR
+    A[保存内存] --> B[提取本机会话密钥]
+    B --> C[解开文件尾记录]
+    C --> D[恢复副本并核对完整内容]
 ```
 
-单文件解密，输入必须是独立密文副本，输出必须不存在：
+另一条路与密钥无关：**Btrfs 写时复制可能留下被覆盖前的数据块**。如果文件未加密的部分仍引用这些块，就可能重组原文件。能否使用取决于实际块映射、快照和后续写入；仅有 Btrfs 或 NoCOW 标签不能下结论。参见 [crt106 的原理说明](https://github.com/crt106/c3rb3r-btrfs-recovery/blob/b831f3a0f718677b889f2998ff09a0b925baa56b/skills/c3rb3r-btrfs-recovery/references/principles.md)及[本仓库的验证边界](skills/dsm-ransomware-rescue/references/btrfs-recovery_CN.md)。
 
-```sh
-.venv/bin/python skills/dsm-ransomware-rescue/scripts/decrypt_copy.py \
-  --copy-root /analysis/copies \
-  --input-copy /analysis/copies/example.tar.L0CK3D \
-  --master-file /analysis/private/master.bin \
-  --output /analysis/recovered/example.tar \
-  --expected-sha256 KNOWN_ORIGINAL_SHA256
-```
+## 已有人成功吗
 
-没有历史摘要时可省略最后一个参数，但成功退出只证明结构检查接受了候选，不证明文件完整。随后完整读取归档、校验 CRC/PACK/LFS，并进行应用层恢复。不要把 `--copy-root` 指向受灾原卷。
+- **本仓库的 PVE 案例：** 从内存取回密钥，约 49 GiB GitLab 周备份与历史摘要完全一致，随后在隔离实例中恢复了 **80 个项目**。
+- **[Benjamin-zlt 的物理机案例](https://github.com/Benjamin-zlt/c3rb3r-baremetal-rescue/blob/906e81293153341f162ee1f176722d93ba1d8358/docs/case-report.md)：** 作者报告恢复约 8.45 万个文件，并用已知原件抽样核对。用的是该机器自己的密钥。
+- **[Btrfs 社区工具](https://github.com/crt106/c3rb3r-btrfs-recovery)：** 提供没有密钥时从旧数据块恢复的另一条路线。不同报告的验证程度不同，不能把恢复数量当成所有文件逐字节验证过。
 
-```sh
-.venv/bin/python skills/dsm-ransomware-rescue/scripts/verify_backup.py /analysis/recovered/example.tar
-```
+本工具针对已分析的样本和格式。[其他受害者的报告](https://github.com/soimy/c3rb3r-rescue/issues/14)已促成物理机采集兼容性修复和会话标记参数化，但仍需先验证少量副本。仓库公开了[本案的一份恢复候选](docs/key-sharing_CN.md)，目前没有证据表明它能解密其他受害者的文件。
 
-该验证器会输出进度与最终 JSON；已判失败的归档退出非零。JSON 语法、PGDMP 文件头及 PACK 摘要各有明确边界，不能替代应用验收。
+## 交给 AI 的任务说明
 
-skill 可随整个目录复制到个人 skills 目录；其脚本、布局参数和参考文档均包含在目录内。此仓库创建过程没有自动更改用户的全局 skill 或 SSH 配置。
+> 阅读这个仓库的 README 和 skills/dsm-ransomware-rescue/SKILL.md，帮助我处置疑似 C3RB3R / .L0CK3D 勒索事件。先确认机器类型、是否重启、加密进程状态、管理通道及独立目标存储。在现有授权内阻止继续损失，优先保存内存和样本，不杀掉已暂停的进程。先在独立副本上验证密钥及完整文件；找不到密钥时检查快照和 Btrfs 旧数据块恢复条件。不要自动重启、运行恶意样本或写回受灾卷。明确告诉我哪些已验证、哪些只是候选。
 
-## 发布前
+补充你的系统版本、物理机或虚拟机、发现时间、是否重启及可用备份。**不要公开密码、内存 dump、密钥或业务文件。**
 
-只暂存经过审查的源码和文档，再检查 Git 暂存区：
+## 需要动手或深入了解时
 
-```sh
-python3 scripts/check_publish.py --repo . --master-file /analysis/private/master.bin
-git diff --cached --stat
-```
-
-检查器拒绝私有目录、二进制、链接、常见凭据和未获授权的已知主材料表示。唯一例外绑定到已审阅的公开候选记录的精确路径与完整文件摘要；修改该记录或将材料复制到其他文件仍会拒绝。它不是完整 DLP；人工检查仍需确认没有复制真实日志、客户路径、配置值或解密内容。
+| 你想做的事 | 文档 |
+|---|---|
+| 采集物理机内存、检查 LiME dump | [物理机指南](skills/dsm-ransomware-rescue/references/physical-memory_CN.md) |
+| 没有密钥，评估 Btrfs 恢复 | [条件、步骤与验证](skills/dsm-ransomware-rescue/references/btrfs-recovery_CN.md) |
+| 安装分析环境、检查文件尾、运行解密 | [工具使用与维护](docs/tool-usage_CN.md) |
+| 看社区成功、失败和适用范围 | [社区发现](docs/community-findings_CN.md) |
+| 理解密钥能否共用 | [密钥层级与公开候选](docs/key-sharing_CN.md) |
+| 研究算法、内存地址及重复加密 | [逆向与解密](skills/dsm-ransomware-rescue/references/reverse-decrypt.md) |
+| 盘点文件、恢复 GitLab | [盘点与校验](skills/dsm-ransomware-rescue/references/inventory-verify.md) · [隔离恢复](skills/dsm-ransomware-rescue/references/gitlab-restore.md) |
+| 查看本案的取证记录 | [事件报告](docs/incident-report_CN.md) · [攻击路径](docs/attack-path_CN.md) · [证据封存](docs/evidence-seal_CN.md) |
+| 查看测试和工具限制 | [工具验证](docs/toolkit-validation_CN.md) · [AI skill](skills/dsm-ransomware-rescue/SKILL.md) |
+| 求助或补充脱敏结果 | [Issues](https://github.com/soimy/c3rb3r-rescue/issues) |

@@ -14,6 +14,42 @@ from decrypt_copy import (CALL_LIMIT, FOOTER_SIZE, MARKER, RecoveryError,
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_explicit_other_session_marker_preserves_crypto_checks(self):
+        marker = bytes.fromhex('492cb42b')  # Public metadata, synthetic keys/content only.
+        master, file_key, nonce = bytes(range(48)), bytes(range(32)), bytes(range(8))
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t); copies = root/'copies'; copies.mkdir()
+            secret = root/'master'; secret.write_bytes(master)
+            for mode, percent in ((0x26, 0), (0x25, 10)):
+                plain = bytes(range(251))*100; body = bytearray(plain); counter = 0
+                for offset, length in encrypted_segments(len(plain), mode, percent):
+                    body[offset:offset+length], counter = chacha8_call(
+                        bytes(body[offset:offset+length]), file_key, nonce, counter)
+                footer = bytearray(FOOTER_SIZE)
+                encryptor = Cipher(algorithms.AES(master[16:]), modes.CBC(master[:16])).encryptor()
+                footer[:48] = encryptor.update(file_key+nonce+nonce)+encryptor.finalize()
+                footer[568:572] = marker
+                footer[572:576] = bytes((mode, percent, 0x20, 0))
+                struct.pack_into('<Q', footer, 580, len(plain))
+                source = copies/str(mode); source.write_bytes(body+footer)
+                output = root/('recovered-%d' % mode)
+                expected = hashlib.sha256(plain).hexdigest()
+                with self.assertRaisesRegex(RecoveryError, 'marker differs'):
+                    decrypt_copy(source, output, secret, copies, expected)
+                self.assertFalse(output.exists())
+                for invalid in (None, b'', b'long-marker', '492cb42b'):
+                    with self.assertRaises(RecoveryError):
+                        decrypt_copy(source, output, secret, copies, expected, invalid)
+                bad = root/'bad-master'; bad.write_bytes(master[:16]+bytes(32))
+                with self.assertRaisesRegex(RecoveryError, 'nonce check failed'):
+                    decrypt_copy(source, output, bad, copies, expected, marker)
+                self.assertFalse(output.exists())
+                result = decrypt_copy(source, output, secret, copies, expected, marker)
+                self.assertEqual(output.read_bytes(), plain)
+                self.assertEqual(result['observed_marker'], marker.hex())
+                self.assertEqual(result['expected_marker'], marker.hex())
+                self.assertEqual(source.read_bytes(), body+footer)
+
     def test_published_chacha8_vectors(self):
         # Primary implementation project's vectors, attributed there to Bernstein.
         # https://github.com/randombit/botan/blob/master/src/tests/data/stream/chacha.vec

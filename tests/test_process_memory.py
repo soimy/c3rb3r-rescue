@@ -11,7 +11,9 @@ import time
 import unittest
 from unittest.mock import patch
 
-from capture_process_memory import capture, capture_region, identity, parse_maps, parse_stat, require_stopped
+from capture_process_memory import (PREAD_OFFSET_LIMIT, capture, capture_region,
+                                    identity, parse_maps, parse_stat, require_stopped,
+                                    select_mappings)
 from recover_process_key import read_va, recover
 
 
@@ -20,6 +22,39 @@ def fake_stat(pid=123, state='T', ticks=900):
 
 
 class ProcessMemoryTests(unittest.TestCase):
+    def test_vsyscall_is_excluded_with_receipt_not_overflow(self):
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t).resolve(); proc = root/'123'; task = proc/'task/123'
+            task.mkdir(parents=True)
+            for path in (proc, task):
+                (path/'stat').write_text(fake_stat())
+                (path/'status').write_text('TracerPid:\t0\n')
+            (proc/'maps').write_text('0000-1000 rw-p 0 00:00 0 [heap]\n'
+                                    'ffffffffff600000-ffffffffff601000 r-xp 0 00:00 0 [vsyscall]\n')
+            (proc/'exe').write_bytes(b'synthetic executable')
+            (proc/'mem').write_bytes(b'K'*4096)
+            selected, excluded = select_mappings(parse_maps((proc/'maps').read_text()))
+            self.assertEqual(sum(r['end']-r['start'] for r in selected), 4096)
+            self.assertEqual(excluded[0]['path'], '[vsyscall]')
+            result = capture(proc, root/'capture', 900,
+                             hashlib.sha256((proc/'exe').read_bytes()).hexdigest(), root.stat().st_dev)
+            self.assertFalse(result['complete'])
+            self.assertTrue(result['selected_mappings_complete'])
+            self.assertEqual(result['excluded_unaddressable'], excluded)
+            self.assertEqual(len(result['regions']), 1)
+            self.assertEqual(read_va(root/'capture', result['regions'], 0, 16), b'K'*16)
+            self.assertEqual(json.loads((root/'capture/capture.json').read_text())['excluded_unaddressable'], excluded)
+
+    def test_off_t_limit_boundary_and_nonreadable_maps(self):
+        limit = PREAD_OFFSET_LIMIT
+        regions = [{'start': limit-4096, 'end': limit, 'permissions': 'r--p', 'path': ''},
+                   {'start': limit-1, 'end': limit+1, 'permissions': 'r--p', 'path': ''},
+                   {'start': limit, 'end': limit+4096, 'permissions': '--xp', 'path': ''}]
+        selected, excluded = select_mappings(regions)
+        self.assertEqual(selected, regions[:1])
+        self.assertEqual(len(excluded), 1)
+        self.assertEqual(excluded[0]['reason'], 'offset_exceeds_signed_off_t')
+
     def test_pid_thread_and_map_guards(self):
         self.assertEqual(parse_stat(fake_stat())['start_ticks'], 900)
         stopped={'state':'T','start_ticks':900,'threads':{'123':{'state':'T','tracer_pid':0}}}

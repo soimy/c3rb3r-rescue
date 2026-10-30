@@ -1,86 +1,73 @@
-# c3rb3r-rescue
+# C3RB3R / .L0CK3D ransomware rescue
 
 English | [简体中文](README_CN.md)
 
-A forensic, memory-key recovery and copy-based decryption record for a DSM / GitLab ransomware incident. It documents reproducible, verified steps as well as failures and gaps in the evidence.
+**NAS files renamed to `.L0CK3D`, with `read-me3.txt` appearing in folders? Preserve the scene first. Recovery may still be possible.**
 
-The tools apply to the analyzed `libgld` sample and file format; they are **not a universal C3RB3R decryptor**. Sample SHA-256: `802ac85d19dc6db2b1849bb3499877280544d04a0ae94d4c408b6c321669903d`. No malicious binary, business data or executable intrusion payload is included.
+This repository helps you or your AI assistant stop further damage, save memory, find recovery keys and restore copies. There are successful [PVE](docs/incident-report.md) and [community physical DSM](https://github.com/soimy/c3rb3r-rescue/issues/14) cases. When no key can be found, some Btrfs files may still be recovered from old data blocks. **What survives depends on your system; there is no universal key.**
 
-**With the owner's authorization, one real [48-byte session recovery candidate](profiles/recovery-key-20261028.json) is published** for other victims to test on copies. It came from RAM and is not the attacker's RSA private key. It has been verified only against files from this incident; **there is no evidence of success across victims**. The same attacker, sample or extension does not imply the same key. See [key sharing](docs/key-sharing.md) for scope, export and matching instructions.
+> **Do not reboot, power off, upgrade, reinstall or `kill -9` the encryptor first.** Its memory may still hold recovery material. Do not delete ciphertext, snapshots or the recycle bin to free space, and do not write recovered files back to the affected storage pool.
 
-**The first priority is to preserve decryption material still in memory.** After stopping further encryption and preserving a management channel, capture available process memory and system RAM as early as possible; do not wait for a full inventory, vulnerability attribution or complete reverse engineering. Do not kill the malware, reboot, upgrade the system or boot another rescue disk first. Memory capture does not guarantee a usable key, but losing this volatile evidence may foreclose the recovery path used here.
+## What to do immediately
 
-This incident's success came from **PVE guest RAM**. The [physical Linux / DSM capture guide](skills/dsm-ransomware-rescue/references/physical-memory.md) covers process mappings, AVML and LiME. Whole-system capture on physical DSM has not been validated on a real device; the VM result cannot be generalized to all devices.
+1. **Stop encryption while preserving the process.** Identify the malicious process before using `sudo kill -STOP PID`, replacing `PID` with its verified process ID. Check that every thread is `T`; `D` means waiting for I/O, not successfully stopped. Names can change: do not suspend or kill processes in bulk based on a name alone.
+2. **Contain access and synchronization.** Block NAS access to the Internet and other devices, checking both IPv4 and IPv6. Pause cloud and shared-folder synchronization to limit propagation. For remote work, first preserve a trusted console or restricted SSH connection so you retain access.
+3. **Save memory and the executable promptly.** Do not wait for a full inventory or vulnerability attribution. Use independent storage with enough space; verify the mount before writing. Keep large dumps out of `/tmp` and the affected data volume. Choose a capture route below.
+4. **Test a few independent ciphertext copies.** Look for intact copies of the same versions on computers, phones, in email or Git clones. Compare full SHA-256 digests or every byte before expanding recovery. Keep the original ciphertext throughout.
+5. **Restore service in a clean environment.** Recovering data does not make the compromised NAS trustworthy. Follow recovery with rebuilding, credential replacement and remediation of the entry point.
 
-## Using this repository with an AI assistant
+If you are unfamiliar with SSH or processes, give this page to an administrator or AI assistant using the prompt below. Do not reboot the affected system to prepare tools.
 
-Give the assistant the repository URL and the task below, along with the system and architecture, whether it is still running, available management channels and the scope of authorization. **Do not send passwords, real keys, complete memory dumps or business files.**
+## Choose your recovery route
 
-> Read the README and skills/dsm-ransomware-rescue/SKILL.md. Prioritize preservation of volatile keys. Establish whether the machine is virtual or physical and distinguish process memory from whole-system RAM. First investigate available permissions, process stop state, destination storage and capture compatibility, then take appropriate steps within existing authorization. Preserve originals, independent copies and verification receipts. Do not execute the sample, automatically load an incompatible kernel module or reboot the affected machine. Attempt decryption only on copies and report verified results, hypotheses and coverage gaps separately.
+| Your situation | Next step |
+|---|---|
+| **DSM runs in PVE and is still powered on** | Preserve guest memory from the trusted host, then search offline. See [containment and PVE memory](skills/dsm-ransomware-rescue/references/containment-memory.md) (Chinese). |
+| **Physical DSM, encryptor still alive** | Stop and verify all threads, save process memory first, then assess whole-system capture. Follow the [physical-machine guide](skills/dsm-ransomware-rescue/references/physical-memory.md). |
+| **Process gone, machine not rebooted** | Promptly preserve available RAM and actually used swap. Do not assume the key survives. Also check snapshots, other copies and the Btrfs route below. |
+| **No usable key, data volume is Btrfs** | Preserve existing snapshots and assess whether surviving file ranges still reference older data blocks. See [Btrfs recovery without keys](skills/dsm-ransomware-rescue/references/btrfs-recovery.md). |
+| **Already powered off or rebooted** | Restarting cannot recover the previous process memory. Preserve disks, existing dumps, snapshots and other copies; Btrfs recovery still needs assessment. |
 
-Similar symptoms do not establish that the sample, session or key is the same. The current decryptor also checks this incident's session footer marker. Other incidents require the layout and marker to be verified again; do not remove checks to force it to run. See [key reuse and sharing](docs/key-sharing.md).
+**“Never rebooted” does not mean “the key is still present”; “process exited” does not mean “all data is lost.”** Community reports include successes and searches with no key found. See [cases and verification limits](docs/community-findings.md).
 
-Results: usable 48-byte master material was found in a 16 GiB memory copy; five known plaintext/ciphertext pairs matched byte for byte. The approximately 49 GiB October 24 weekly backup matched its historical digest and was restored in an isolated GitLab instance of the same version: 80 projects, 23 users, 16 groups and 9,253 LFS objects. Repository, secrets, LFS, attachment and artifact checks passed, and the login page returned 200. Another weekly backup from October 22 remains incompletely recovered due to interleaved repeated encryption. Newly discovered memory logs strongly point to DSM login-plugin environment injection consistent with CVE-2024-10441; the complete request and execution chain are still missing.
+## Why recovery can work
 
-## Documentation
+The analyzed program generates encryption material for each file, protects it with a **session key**, and stores the protected record at the end of the file. The session key may remain in the encryptor's memory. A matching key can unlock those records and allow file recovery without obtaining the attacker's private key.
 
-- [Incident and evidence boundaries](docs/incident-report.md)
-- [Attack path: logs, RAM structures and vulnerability assessment](docs/attack-path.md) · [verifiable evidence index](docs/attack-path-evidence.json)
-- [Evidence sealing, custody and verification](docs/evidence-seal.md)
-- [Tool validation](docs/toolkit-validation.md)
-- [Physical-machine capture and failure paths](skills/dsm-ransomware-rescue/references/physical-memory.md)
-- [Key hierarchy, reuse and publication boundaries](docs/key-sharing.md)
-- [Reusable skill](skills/dsm-ransomware-rescue/SKILL.md) (Chinese): preservation, RAM, REA reverse engineering, inventory, decryption and GitLab validation.
-
-## Local and GitHub boundaries
-
-The public GitHub repository contains sanitized records, the skill, source code, synthetic tests, sample layout parameters and the separately authorized recovery candidate above. Inspect the Git index before each publication; that authorization does not cover other keys, credentials, complete RAM or business data.
-
-Git ignores `private/`, which holds local evidence copies, memory dumps, other key candidates, raw logs, conversation snapshots and custody inventories. **A Git clone contains the separately published candidate, but none of this private evidence, and cannot reconstruct keys from other sessions.** Large business ciphertexts and recovered backups remain on the rescue NAS; a local index records their locations and existing verification receipts, without copying them into Git history.
-
-This is logical sealing: independent copies, per-file digests, read-back verification, read-only permissions and provenance records. No full-disk forensic image was made, the running DSM was not turned into an immutable disk snapshot, and the networked NAS is not described as an offline backup.
-
-## Usage
-
-Tools live in `skills/dsm-ransomware-rescue/scripts/`. The analysis environment requires Python 3.11+; regression tests were run with Python 3.12. See `requirements.txt` for NumPy and cryptography versions. DSM metadata inventory and the process collector require only the Python 3.8+ standard library; do not upgrade an affected system to run the decryptor.
-
-Set up a clean analysis machine:
-
-```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-PYTHONPATH=skills/dsm-ransomware-rescue/scripts:scripts .venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python skills/dsm-ransomware-rescue/scripts/verify_backup.py --self-test
+```mermaid
+flowchart LR
+    A[Save memory] --> B[Extract this session's key]
+    B --> C[Unlock file footer records]
+    C --> D[Recover copies and verify full contents]
 ```
 
-For single-file decryption, the input must be an independent ciphertext copy and the output must not already exist:
+A separate route needs no key: **Btrfs copy-on-write may retain data blocks from before the overwrite**. If untouched parts of a file still reference those blocks, reconstruction may be possible. Actual extent mappings, snapshots and subsequent writes determine whether this works; a Btrfs or NoCOW label alone is insufficient. See [crt106's explanation](https://github.com/crt106/c3rb3r-btrfs-recovery/blob/b831f3a0f718677b889f2998ff09a0b925baa56b/skills/c3rb3r-btrfs-recovery/references/principles.md) and [our verification limits](skills/dsm-ransomware-rescue/references/btrfs-recovery.md).
 
-```sh
-.venv/bin/python skills/dsm-ransomware-rescue/scripts/decrypt_copy.py \
-  --copy-root /analysis/copies \
-  --input-copy /analysis/copies/example.tar.L0CK3D \
-  --master-file /analysis/private/master.bin \
-  --output /analysis/recovered/example.tar \
-  --expected-sha256 KNOWN_ORIGINAL_SHA256
-```
+## Has it worked for anyone?
 
-The last argument may be omitted if no historical digest exists, but a successful exit only means structural checks accepted the candidate; it does not prove file integrity. Read the entire archive, verify CRC/PACK/LFS, and perform an application-level restore. Do not point `--copy-root` at the affected original volume.
+- **This repository's PVE case:** a key recovered from memory restored an approximately 49 GiB GitLab weekly backup that matched its historical digest. An isolated restore recovered **80 projects**.
+- **[Benjamin-zlt's physical-machine case](https://github.com/Benjamin-zlt/c3rb3r-baremetal-rescue/blob/906e81293153341f162ee1f176722d93ba1d8358/docs/case-report.md):** the author reports recovering about 84,500 files and checking a sample against known originals, using that machine's own key.
+- **[Community Btrfs tools](https://github.com/crt106/c3rb3r-btrfs-recovery):** an alternative that reconstructs files from older blocks without a key. Verification varies between reports; file counts do not mean every file was compared byte for byte.
 
-```sh
-.venv/bin/python skills/dsm-ransomware-rescue/scripts/verify_backup.py /analysis/recovered/example.tar
-```
+These tools target an analyzed sample and format. [Other victims' reports](https://github.com/soimy/c3rb3r-rescue/issues/14) have prompted physical-machine capture fixes and support for explicit session markers, but always test a few copies first. The repository also publishes [one recovery candidate from our case](docs/key-sharing.md); there is currently no evidence that it decrypts another victim's files.
 
-The verifier reports progress and final JSON, and exits nonzero for archives it determines have failed. JSON syntax, PGDMP headers and PACK digests each have limits and do not replace application acceptance.
+## A prompt for your AI assistant
 
-The whole skill directory can be copied to a personal skills directory; it includes its scripts, layout parameters and references. Creating this repository did not automatically change the user's global skills or SSH configuration.
+> Read this repository's README and skills/dsm-ransomware-rescue/SKILL.md. Help me respond to a suspected C3RB3R / .L0CK3D incident. First establish the machine type, reboot history, encryptor state, management channel and independent destination storage. Within existing authorization, contain further damage and prioritize memory and executable preservation; do not kill a stopped encryptor. Validate candidate keys and full files on independent copies first. If no key is available, assess snapshots and Btrfs old-block recovery. Do not automatically reboot, execute malware or write to the affected volume. Clearly distinguish verified results from candidates.
 
-## Before publication
+Add your system version, physical/virtual setup, discovery time, reboot history and available backups. **Do not publish passwords, memory dumps, keys or business files.**
 
-Stage only reviewed source and documentation, then inspect the Git index:
+## When you need commands or deeper detail
 
-```sh
-python3 scripts/check_publish.py --repo . --master-file /analysis/private/master.bin
-git diff --cached --stat
-```
-
-The checker rejects private directories, binaries, links, common credentials and unauthorized representations of known master material. The sole exception is tied to the exact path and complete file digest of the reviewed public candidate; modifying that record or copying the material elsewhere is still rejected. It is not a complete DLP solution: manually confirm that real logs, customer paths, configuration values and decrypted content have not been copied.
+| Task | Guide |
+|---|---|
+| Capture physical-machine memory; inspect LiME dumps | [Physical-machine guide](skills/dsm-ransomware-rescue/references/physical-memory.md) |
+| Assess Btrfs recovery without a key | [Conditions, workflow and verification](skills/dsm-ransomware-rescue/references/btrfs-recovery.md) |
+| Set up analysis tools, inspect footers, decrypt copies | [Tool usage and maintenance](docs/tool-usage.md) |
+| Understand community successes, failures and scope | [Community findings](docs/community-findings.md) |
+| Understand key reuse | [Key hierarchy and public candidate](docs/key-sharing.md) |
+| Study algorithms, memory addresses and repeated encryption | [Reverse engineering and decryption](skills/dsm-ransomware-rescue/references/reverse-decrypt.md) (Chinese) |
+| Inventory files or restore GitLab | [Inventory and verification](skills/dsm-ransomware-rescue/references/inventory-verify.md) · [Isolated restore](skills/dsm-ransomware-rescue/references/gitlab-restore.md) (Chinese) |
+| Read this incident's forensic records | [Incident report](docs/incident-report.md) · [Attack path](docs/attack-path.md) · [Evidence sealing](docs/evidence-seal.md) |
+| Check tests and tool limitations | [Tool validation](docs/toolkit-validation.md) · [AI skill](skills/dsm-ransomware-rescue/SKILL.md) (Chinese) |
+| Ask for help or contribute sanitized results | [Issues](https://github.com/soimy/c3rb3r-rescue/issues) |

@@ -2,7 +2,9 @@
 
 [English](physical-memory.md) | 简体中文
 
-核对资料日期：2026-10-29。这里区分上游支持、合成测试、隔离 Linux 子进程测试和真正的物理设备验收。**本案实证仍是 PVE RAM；没有在物理 DSM 上验证 AVML 或加载 LiME。**
+核对资料日期：2026-10-29；社区更新：2026-10-30。这里区分上游支持、合成测试、隔离 Linux 子进程测试和真正的物理设备验收。**本案实证仍是 PVE RAM；没有在物理 DSM 上验证 AVML 或加载 LiME。**
+
+社区现已有物理 DSM 进程内存恢复成功汇报，包括 [Issue #14](https://github.com/soimy/c3rb3r-rescue/issues/14) 的 DS920+／DSM 7.2.2。这属于汇报者的结果，不是维护者新增的实机测试。仍须区分进程采集、AVML 命令完成和整机覆盖验证，见[社区证据](https://github.com/soimy/c3rb3r-rescue/blob/main/docs/community-findings_CN.md)。
 
 ## 先选能立即保全的路径
 
@@ -43,7 +45,9 @@ sudo python3 /opt/ir/capture_process_memory.py capture \
 
 采集器只读 mem，不附加 debugger，不发送 STOP/CONT/KILL，不改变权限或加载模块。开始和边界处核对 PID start ticks、exe SHA、所有线程 T/无 tracer、maps 和目的设备；先收集私有匿名可写区、其他可写区，再收集剩余可读区。它不保证两次边界检查之间绝无瞬时恢复，其他进程也可能改变共享页；读 mem 可能调入已换出的页。
 
-新目录必须不存在。每个文件保留起止 VA、SHA、读回验证和不可读页表；空洞在文件中为零占位，**不是采到的零内存**。退出 2 表示有缺页，完成的区域仍有价值；没有 capture.json 的中断目录只能按 regions.jsonl / failure.json 解释为部分采集。不会自动删除这些材料或覆盖重试。
+新目录必须不存在。每个文件保留起止 VA、SHA、读回验证和不可读页表；空洞在文件中为零占位，**不是采到的零内存**。退出 2 表示有缺页或被排除的不可寻址映射，完成的区域仍有价值；没有 capture.json 的中断目录只能按 regions.jsonl / failure.json 解释为部分采集。不会自动删除这些材料或覆盖重试。
+
+[Issue #14 的实际报错](https://github.com/soimy/c3rb3r-rescue/issues/14)暴露了这一兼容性问题：x86-64 的 `[vsyscall]` 可能超出 `pread` 接受的有符号 64 位偏移。采集器在估算空间前排除跨越该上限的整个映射，在 `excluded_unaddressable` 中记录，`inspect` 也会显示；不会把高地址转换成负偏移或静默丢弃。`selected_mappings_complete` 只描述选定映射；只要排除了任意可读映射或存在缺页，`complete` 就为 false。预期内的排除也需要核对收据，不能称为完整 RAM。
 
 进程输出不是 ELF core。转移到干净分析机、核对文件摘要后，可对相同已审阅样本运行：
 
@@ -69,6 +73,8 @@ sha256sum /mnt/ir-evidence/CASE/ram-new.lime
 ```
 
 模板基于该 release 的未压缩 LiME 输出。保留 stderr、来源和退出状态，另在分析机读回校验。没有把命令存在或退出 0 视为覆盖所有 RAM；压缩输出要保留原件，离线转换独立副本。禁止使用自动删除/上传选项处理现场唯一副本。[固定版本说明](https://github.com/microsoft/avml/blob/v0.21.0/README.md)
+
+传回后按[工具使用](https://github.com/soimy/c3rb3r-rescue/blob/main/docs/tool-usage_CN.md)运行离线 `inspect_lime.py`。LiME v1 的头部是 **32 字节**，末地址包含在范围内，长度为 `end - start + 1`，不能按 24 字节头直接拼接。保留文件偏移与物理范围的映射；地址间隙可能是硬件空洞。与保存的 `/proc/iomem` 中可用 System RAM 地址对照，即使结构通过也保留采集超时／报错。[LiME 头部定义](https://github.com/504ensicsLabs/LiME/blob/master/src/lime.h)
 
 ## C. LiME 与 DSM 专有内核
 
@@ -105,3 +111,11 @@ printf 'ACQUIRE_EXIT=%s\n' "$?"
 kdump 依赖预留 crash kernel 并在 crash 路径采集；过滤选项还可能排除用户页。不要在当前唯一现场临时触发 panic、重启配置 kdump 或把故障恢复步骤当成非破坏性采集。已配置、已验证的 crash 取证属于另一个明确决策；本指南没有提供触发命令。[Linux kdump](https://docs.kernel.org/admin-guide/kdump/kdump.html)
 
 Windows 物理机可另行评估官方 WinPmem 的匹配签名驱动；本仓库 Linux 采集器不适用，也不应为加载驱动改 test-signing 后重启。macOS/Apple Silicon 不提供通用整机 dump 承诺，应转向实际受支持的专项取证路径；不要临时关闭 SIP 或重启试工具。[WinPmem](https://github.com/Velocidex/WinPmem)
+
+## 进程已经退出时
+
+此节吸收了 [#6 的 OOM／快照报告](https://github.com/soimy/c3rb3r-rescue/issues/6)、[#9 的 RAM／zram 阴性搜索](https://github.com/soimy/c3rb3r-rescue/issues/9)及 [#10 的证据边界](https://github.com/soimy/c3rb3r-rescue/issues/10)，以下为据此给出的处置建议。
+
+OOM 杀进程、正常退出和攻击者清理有不同证据，不能仅凭开机时长或可执行文件已删除就下结论。没有经过验证的“多少小时以内安全”期限。RAM 搜索阴性只覆盖该份采集和搜索方法。保留 `/proc/swaps` 和实际使用量：未使用的磁盘 swap 不能代替正在使用的 zram，原始压缩 zram 也不等于解压后的线性交换页。采集要保留格式，不能用 swapoff 走捷径。
+
+易失证据保全后检查尚存快照和独立原件。Btrfs 应先评估[旧 extent 恢复](btrfs-recovery_CN.md)，再判断是否不可恢复；这些操作的新增文件仍应放到受灾存储池之外。
